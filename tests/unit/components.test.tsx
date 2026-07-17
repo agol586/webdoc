@@ -102,6 +102,18 @@ it("shows Mermaid source when rendering fails", async () => {
   expect(screen.getByText("broken")).toBeVisible();
 });
 
+it("normalizes Mermaid source before rendering", async () => {
+  render(
+    <MermaidBlocks
+      html={'<pre class="mermaid" data-mermaid-source="    flowchart LR\r\n      A --> B\n"></pre>'}
+      path="README.md"
+    />,
+  );
+
+  await vi.waitFor(() => expect(mockMermaidRender).toHaveBeenCalled());
+  expect(mockMermaidRender).toHaveBeenCalledWith(expect.stringMatching(/^mermaid-.*-0$/), "flowchart LR\n  A --> B");
+});
+
 it("shows an unavailable project without exposing its filesystem path", () => {
   render(<ProjectUnavailable title="Unavailable" />);
   expect(screen.getByRole("heading", { name: "Unavailable is unavailable" })).toBeVisible();
