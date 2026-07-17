@@ -4,7 +4,7 @@ import { extname } from "node:path";
 import { Readable } from "node:stream";
 
 import type { ProjectConfig } from "../config/load";
-import { resolveInsideRoot } from "../lib/path-policy";
+import { resolveInsideRoot, validateHomepagePath } from "../lib/path-policy";
 import type { TreeNode } from "./types";
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
@@ -92,6 +92,17 @@ function sortNodes(nodes: TreeNode[]): TreeNode[] {
   });
 }
 
+function firstMarkdown(nodes: TreeNode[]): string | null {
+  for (const node of nodes) {
+    if (node.kind === "markdown") return node.path;
+    if (node.kind === "directory") {
+      const match = firstMarkdown(node.children);
+      if (match) return match;
+    }
+  }
+  return null;
+}
+
 export class DocumentRepository {
   async isAvailable(project: ProjectConfig): Promise<boolean> {
     try {
@@ -147,12 +158,19 @@ export class DocumentRepository {
     return sortNodes(nodes);
   }
 
-  async chooseHomepage(project: ProjectConfig, _tree?: TreeNode[]): Promise<string | null> {
+  async chooseHomepage(project: ProjectConfig, tree?: TreeNode[]): Promise<string | null> {
     if (project.homepage !== undefined) {
       await this.validateHomepage(project, project.homepage);
       return project.homepage;
     }
 
+    if (tree) {
+      for (const candidate of ["readme.md", "index.md"]) {
+        const match = tree.find((node) => node.kind === "markdown" && node.name.toLowerCase() === candidate);
+        if (match) return match.path;
+      }
+      return firstMarkdown(tree);
+    }
     for (const candidate of ["README.md", "index.md"]) {
       try {
         await this.validateHomepage(project, candidate);
@@ -163,11 +181,7 @@ export class DocumentRepository {
   }
 
   private async validateHomepage(project: ProjectConfig, requested: string): Promise<void> {
-    const canonical = await resolveInsideRoot(project.root, requested);
-    const metadata = await stat(canonical);
-    if (extname(canonical).toLowerCase() !== ".md" || !metadata.isFile()) {
-      throw new InvalidHomepageError("Homepage must point to a Markdown file inside the project root");
-    }
+    await validateHomepagePath(project.root, requested);
   }
 
   async read(project: ProjectConfig, path: string, limit: number): Promise<Buffer> {

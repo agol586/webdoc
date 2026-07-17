@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import { RawConfigSchema } from "./schema";
+import { validateHomepagePath } from "../lib/path-policy";
 
 export type ProjectConfig = {
   id: string;
@@ -22,12 +23,11 @@ export async function loadConfig(configPath: string): Promise<WebDocConfig> {
   const parsed = RawConfigSchema.parse(parseYaml(source));
   const base = dirname(resolve(configPath));
   const projects = await Promise.all(
-    parsed.projects.map(async (project) => ({
-      id: project.id,
-      title: project.title,
-      root: await realpath(resolve(base, project.path)),
-      homepage: project.homepage,
-    })),
+    parsed.projects.map(async (project) => {
+      const root = await realpath(resolve(base, project.path));
+      if (project.homepage !== undefined) await validateHomepagePath(root, project.homepage);
+      return { id: project.id, title: project.title, root, homepage: project.homepage };
+    }),
   );
 
   return {

@@ -133,7 +133,8 @@ export class ProjectWatcher {
         this.context.config = next;
         this.hub.publish({ kind: "config" });
         this.hub.publish({ kind: "status", status: "connected" });
-      } catch {
+      } catch (error) {
+        console.error("WebDoc config reload rejected", { category: error instanceof Error ? error.name : "UnknownError", message: error instanceof Error ? error.message : String(error) });
         if (!this.isCurrent(token)) return;
         if (version === this.reloadVersion) this.hub.publish({ kind: "status", status: "degraded" });
       }
@@ -163,7 +164,8 @@ export class ProjectWatcher {
         if (!this.isRecoveryCurrent(token, epoch)) return;
         this.hub.publish({ kind: "project", projectId: project.id });
       }
-    } catch {
+    } catch (error) {
+      console.error("WebDoc watcher recovery failed", { category: error instanceof Error ? error.name : "UnknownError", message: error instanceof Error ? error.message : String(error) });
       // Stay degraded; another watcher error can initiate a later bounded rescan.
     } finally {
       clearTimeout(deadline);

@@ -1,5 +1,5 @@
-import { realpath } from "node:fs/promises";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { realpath, stat } from "node:fs/promises";
+import { extname, isAbsolute, relative, resolve, sep } from "node:path";
 
 export class PathPolicyError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -40,4 +40,17 @@ export async function resolveInsideRoot(root: string, requested: string): Promis
     throw new PathPolicyError("symlink target outside project root");
   }
   return canonical;
+}
+
+export async function validateHomepagePath(root: string, requested: string): Promise<void> {
+  try {
+    const canonical = await resolveInsideRoot(root, requested);
+    const metadata = await stat(canonical);
+    if (extname(canonical).toLowerCase() !== ".md" || !metadata.isFile()) {
+      throw new PathPolicyError("must be an existing regular Markdown file inside the project root");
+    }
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new PathPolicyError(`Homepage validation failed: ${detail}`, { cause: error });
+  }
 }

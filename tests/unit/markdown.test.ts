@@ -28,6 +28,12 @@ describe("renderMarkdown", () => {
     );
   });
 
+  it("routes linked files with extensions to bounded asset downloads", async () => {
+    const { html } = await renderMarkdown({ projectId: "alpha", documentPath: "guide/a.md", source: "[PDF](../manual.pdf) [dir](../reference)" });
+    expect(html).toContain('href="/api/assets/alpha/manual.pdf"');
+    expect(html).toContain('href="/p/alpha/reference"');
+  });
+
   it.each([
     "javascript:alert(1)",
     "JaVaScRiPt:alert(1)",

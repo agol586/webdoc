@@ -56,13 +56,27 @@ describe("loadConfig", () => {
   });
 
   it("accepts configured server, limits, and homepage values", async () => {
-    const { config } = await loadFixtureConfig(
+    const directory = await createFixture();
+    await mkdir(join(directory, "alpha", "guide"));
+    await writeFile(join(directory, "alpha", "guide", "start.md"), "home");
+    const configPath = join(directory, "webdoc.config.yaml");
+    await writeFile(configPath,
       "server:\n  host: 0.0.0.0\n  port: 8080\nlimits:\n  markdownBytes: 100\n  assetBytes: 200\nprojects:\n  - id: alpha\n    title: Alpha\n    path: ./alpha\n    homepage: guide/start.md\n",
     );
+    const config = await loadConfig(configPath);
 
     expect(config.server).toEqual({ host: "0.0.0.0", port: 8080 });
     expect(config.limits).toEqual({ markdownBytes: 100, assetBytes: 200 });
     expect(config.projects[0].homepage).toBe("guide/start.md");
+  });
+
+  it.each(["../outside.md", "missing.md", "folder.md", "notes.txt"])("rejects invalid explicit homepage %s", async (homepage) => {
+    const directory = await createFixture();
+    await mkdir(join(directory, "alpha", "folder.md"));
+    await writeFile(join(directory, "alpha", "notes.txt"), "notes");
+    const configPath = join(directory, "webdoc.config.yaml");
+    await writeFile(configPath, `projects:\n  - id: alpha\n    title: Alpha\n    path: ./alpha\n    homepage: ${homepage}\n`);
+    await expect(loadConfig(configPath)).rejects.toThrow(/homepage|markdown|outside|regular/i);
   });
 
   it.each([0, 65536])("rejects port %d", async (port) => {

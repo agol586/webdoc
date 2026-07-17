@@ -146,6 +146,7 @@ describe("ProjectWatcher", () => {
   });
 
   it("stops recovery before scanning when the project budget is exceeded", async () => {
+    const diagnostic = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const hub = { publish: vi.fn() } as unknown as ChangeHub;
     const repository = new DocumentRepository();
     vi.spyOn(repository, "getTree").mockResolvedValue([]);
@@ -156,6 +157,7 @@ describe("ProjectWatcher", () => {
     emit("error", new Error("overflow"));
     await vi.waitFor(() => expect(hub.publish).toHaveBeenCalledWith({ kind: "status", status: "degraded" }));
     expect(repository.getTree).not.toHaveBeenCalled();
+    expect(diagnostic).toHaveBeenCalledWith("WebDoc watcher recovery failed", expect.objectContaining({ category: "Error", message: expect.stringMatching(/budget/i) }));
   });
 
   it("close aborts and awaits recovery without publishing afterward", async () => {
@@ -240,6 +242,7 @@ describe("ProjectWatcher", () => {
   });
 
   it("invalid reload aborts an older recovery and it never restores connected health", async () => {
+    const diagnostic = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const hub = { publish: vi.fn() } as unknown as ChangeHub;
     const repository = new DocumentRepository();
     let recoverySignal: AbortSignal | undefined;
@@ -257,5 +260,6 @@ describe("ProjectWatcher", () => {
     expect(recoverySignal?.aborted).toBe(true);
     await vi.waitFor(() => expect(hub.publish).toHaveBeenCalledWith({ kind: "status", status: "degraded" }));
     expect(hub.publish).not.toHaveBeenCalledWith({ kind: "status", status: "connected" });
+    expect(diagnostic).toHaveBeenCalledWith("WebDoc config reload rejected", expect.objectContaining({ category: "Error", message: "invalid" }));
   });
 });

@@ -4,11 +4,11 @@ WebDoc serves multiple local Markdown projects through a responsive web reader w
 
 ## Setup
 
-Requires a current Node.js release supported by Next.js and npm.
+Requires Node.js 24 or newer; Node 24 is the verified release line. A clean checkout should use `npm ci` for reproducible installation.
 
 ```bash
 cp webdoc.config.example.yaml webdoc.config.yaml
-npm install
+npm ci
 npm run dev
 ```
 
@@ -41,6 +41,10 @@ projects:
 - `limits.assetBytes` defaults to 25 MiB and limits images and downloadable attachments.
 - Every `projects` entry needs a URL-safe lowercase `id`, display `title`, and directory `path`. Paths are resolved relative to the config file.
 - `homepage` is optional and must name Markdown inside the project. An explicit homepage wins; otherwise WebDoc tries root `README.md`, then root `index.md`, then the first Markdown document for navigation fallbacks.
+
+`npm audit` currently reports 2 moderate vulnerabilities in transitive development dependencies. Review them when updating the lockfile. Keep npm lifecycle scripts restricted with your environment's `allowScripts` policy, and explicitly review any package newly permitted to run install scripts.
+
+When packaging a production build, preserve Next.js/Turbopack output-file tracing artifacts (including `.next/standalone` and traced dependencies); copying only static assets can produce a build that starts but fails at runtime.
 
 Markdown (`.md`) is rendered with GitHub-flavored tables and task lists, syntax-highlighted fenced code, and Mermaid fenced diagrams. Common AVIF, GIF, JPEG, PNG, SVG, and WebP images are previewed; other regular files are exposed as bounded attachments.
 

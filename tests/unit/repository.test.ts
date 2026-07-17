@@ -95,6 +95,19 @@ describe("DocumentRepository", () => {
     expect(await repository.chooseHomepage(project)).toBeNull();
   });
 
+  it("uses the supplied tree for case-insensitive root candidates before nested markdown", async () => {
+    const tree: TreeNode[] = [
+      { kind: "directory", name: "aaa", path: "aaa", children: [{ kind: "markdown", name: "first.md", path: "aaa/first.md", size: 1 }] },
+      { kind: "markdown", name: "readME.MD", path: "readME.MD", size: 1 },
+    ];
+    expect(await repository.chooseHomepage(project, tree)).toBe("readME.MD");
+  });
+
+  it("falls back to the first markdown in the supplied tree", async () => {
+    const tree: TreeNode[] = [{ kind: "directory", name: "guide", path: "guide", children: [{ kind: "markdown", name: "start.md", path: "guide/start.md", size: 1 }] }];
+    expect(await repository.chooseHomepage(project, tree)).toBe("guide/start.md");
+  });
+
   it("skips an invalid automatic homepage candidate", async () => {
     await mkdir(join(root, "README.md"));
     await writeFile(join(root, "index.md"), "home");
