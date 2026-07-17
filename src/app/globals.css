@@ -1,0 +1,41 @@
+:root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #18212f; background: #f7f8fa; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #2457a7; }
+.app-header { position: sticky; top: 0; z-index: 20; min-height: 4rem; display: flex; align-items: center; gap: 1rem; padding: .75rem 1.25rem; color: #fff; background: #172238; box-shadow: 0 1px 6px #10182833; }
+.project-switcher { display: flex; align-items: center; gap: .65rem; font-weight: 650; }
+.project-switcher select { min-width: 12rem; padding: .48rem .7rem; border: 1px solid #9aa7ba; border-radius: .4rem; background: #fff; color: #18212f; }
+.reader-layout { display: grid; grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr); min-height: calc(100vh - 4rem); }
+.document-tree { padding: 1.25rem; background: #eef1f5; overflow: auto; }
+.desktop-tree { position: sticky; top: 4rem; height: calc(100vh - 4rem); border-right: 1px solid #d3d9e2; }
+.document-tree ul { margin: .3rem 0; padding-left: 1.15rem; list-style: none; }
+.document-tree > ul { padding-left: 0; }
+.document-tree li { margin: .36rem 0; }
+.document-tree summary { cursor: pointer; font-weight: 650; }
+.document-tree a { display: inline-block; border-radius: .25rem; padding: .18rem .3rem; color: #27364c; text-decoration: none; }
+.document-tree a:hover, .document-tree a:focus-visible { text-decoration: underline; }
+.document-tree a[aria-current="page"] { color: #153f82; background: #d9e6fb; font-weight: 700; }
+.content-pane { min-width: 0; padding: clamp(1.25rem, 4vw, 3.5rem); }
+.content-pane article, .empty-state { width: min(100%, 58rem); margin: 0 auto; }
+.document-body { line-height: 1.7; overflow-wrap: anywhere; }
+.document-body img, .document-body svg { max-width: 100%; height: auto; }
+.document-body pre, .document-body .table-container { overflow-x: auto; }
+.document-body table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+.document-body th, .document-body td { padding: .5rem .7rem; border: 1px solid #ccd3dd; }
+.document-body pre { padding: 1rem; border-radius: .45rem; background: #101827; color: #f4f6f8; }
+.document-body pre.mermaid { background: #fff; color: #18212f; border: 1px solid #d3d9e2; }
+.mermaid-error { color: #9a3412; font-weight: 650; }
+.tree-toggle { display: none; }
+.drawer-backdrop { display: none; }
+@media (max-width: 767px) {
+  .app-header { justify-content: space-between; padding: .65rem .8rem; }
+  .tree-toggle { display: inline-block; padding: .5rem .7rem; border: 1px solid #c8d1df; border-radius: .35rem; background: transparent; color: #fff; }
+  .project-switcher span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .project-switcher select { min-width: 0; max-width: 48vw; }
+  .reader-layout { display: block; }
+  .desktop-tree { display: none; }
+  .drawer-backdrop { position: fixed; inset: 0; z-index: 30; display: block; background: #0f172a99; }
+  .mobile-tree { width: min(86vw, 20rem); height: 100%; box-shadow: .5rem 0 1.5rem #0f172a44; }
+  .drawer-close { margin-bottom: .75rem; padding: .4rem .65rem; }
+  .content-pane { padding: 1.2rem; }
+}
