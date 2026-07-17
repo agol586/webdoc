@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import type { TreeNode } from "../repository/types";
 import { FileTree } from "./file-tree";
 import { ProjectSwitcher, type ProjectOption } from "./project-switcher";
+import { LiveRefresh } from "./live-refresh";
 
 export function AppShell({ projects, activeId, nodes, activePath, children }: {
   projects: ProjectOption[];
@@ -52,6 +53,7 @@ export function AppShell({ projects, activeId, nodes, activePath, children }: {
   const tree = <FileTree projectId={activeId} nodes={nodes} activePath={activePath} />;
   return (
     <div className="app-shell">
+      <LiveRefresh activeId={activeId} activePath={activePath} />
       <header className="app-header">
         <button ref={toggleRef} className="tree-toggle" aria-expanded={drawerOpen} aria-controls="mobile-tree" onClick={() => setDrawerOpen(true)}>
           Browse documents
