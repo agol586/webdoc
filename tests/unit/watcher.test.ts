@@ -8,6 +8,7 @@ import { ChangeHub } from "../../src/live/change-hub";
 import { ProjectWatcher, type WatchHandle } from "../../src/live/watcher";
 import { DocumentRepository } from "../../src/repository/repository";
 import type { ServerContext } from "../../src/server/context";
+import type { WebDocConfig } from "../../src/config/load";
 
 let fixture: string;
 let alphaRoot: string;
@@ -141,5 +142,70 @@ describe("ProjectWatcher", () => {
     releases.shift()!();
     await vi.waitFor(() => expect(repository.getTree).toHaveBeenCalledTimes(2));
     expect(maximum).toBe(1);
+    expect(repository.getTree).toHaveBeenNthCalledWith(1, context.config.projects[0], expect.objectContaining({ maxEntries: 100_000, signal: expect.any(AbortSignal) }));
+  });
+
+  it("stops recovery before scanning when the project budget is exceeded", async () => {
+    const hub = { publish: vi.fn() } as unknown as ChangeHub;
+    const repository = new DocumentRepository();
+    vi.spyOn(repository, "getTree").mockResolvedValue([]);
+    const projects = Array.from({ length: 101 }, (_, index) => ({ id: `p${index}`, title: `P${index}`, root: alphaRoot }));
+    const context: ServerContext = { config: { server: { host: "127.0.0.1", port: 3000 }, limits: { markdownBytes: 1, assetBytes: 1 }, projects }, repository };
+    const watcher = new ProjectWatcher(context, hub, configPath, () => fakeWatch());
+    await watcher.start(context.config);
+    emit("error", new Error("overflow"));
+    await vi.waitFor(() => expect(hub.publish).toHaveBeenCalledWith({ kind: "status", status: "degraded" }));
+    expect(repository.getTree).not.toHaveBeenCalled();
+  });
+
+  it("close aborts and awaits recovery without publishing afterward", async () => {
+    const hub = { publish: vi.fn() } as unknown as ChangeHub;
+    const repository = new DocumentRepository();
+    vi.spyOn(repository, "getTree").mockImplementation(async (_project, options) => {
+      await new Promise<void>((_resolve, reject) => options?.signal?.addEventListener("abort", () => reject(options.signal?.reason), { once: true }));
+      return [];
+    });
+    const context: ServerContext = { config: { server: { host: "127.0.0.1", port: 3000 }, limits: { markdownBytes: 1, assetBytes: 1 }, projects: [{ id: "alpha", title: "Alpha", root: alphaRoot }] }, repository };
+    const watcher = new ProjectWatcher(context, hub, configPath, () => fakeWatch());
+    await watcher.start(context.config);
+    emit("error", new Error("overflow"));
+    await vi.waitFor(() => expect(repository.getTree).toHaveBeenCalled());
+    (hub.publish as ReturnType<typeof vi.fn>).mockClear();
+    await watcher.close();
+    expect(hub.publish).not.toHaveBeenCalled();
+  });
+
+  it("serializes overlapping reloads so the latest disk generation wins", async () => {
+    const hub = { publish: vi.fn() } as unknown as ChangeHub;
+    const context: ServerContext = { config: { server: { host: "127.0.0.1", port: 3000 }, limits: { markdownBytes: 1, assetBytes: 1 }, projects: [{ id: "alpha", title: "Alpha", root: alphaRoot }] }, repository: new DocumentRepository() };
+    const releases: Array<(config: WebDocConfig) => void> = [];
+    const loader = vi.fn(() => new Promise<WebDocConfig>((resolve) => releases.push(resolve)));
+    const watcher = new ProjectWatcher(context, hub, configPath, () => fakeWatch(), loader);
+    await watcher.start(context.config);
+    const first = watcher.reloadConfig();
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    const second = watcher.reloadConfig();
+    releases.shift()!({ ...context.config, projects: [{ id: "stale", title: "Stale", root: alphaRoot }] });
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    releases.shift()!({ ...context.config, projects: [{ id: "latest", title: "Latest", root: alphaRoot }] });
+    await Promise.all([first, second]);
+    expect(context.config.projects[0].id).toBe("latest");
+  });
+
+  it("close during reload prevents context writes and publication", async () => {
+    const hub = { publish: vi.fn() } as unknown as ChangeHub;
+    const original = { server: { host: "127.0.0.1", port: 3000 }, limits: { markdownBytes: 1, assetBytes: 1 }, projects: [{ id: "alpha", title: "Alpha", root: alphaRoot }] };
+    const context: ServerContext = { config: original, repository: new DocumentRepository() };
+    let release!: (config: WebDocConfig) => void;
+    const loader = () => new Promise<WebDocConfig>((resolve) => { release = resolve; });
+    const watcher = new ProjectWatcher(context, hub, configPath, () => fakeWatch(), loader);
+    await watcher.start(context.config);
+    const reload = watcher.reloadConfig();
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    const closing = watcher.close();
+    release({ ...original, projects: [{ id: "stale", title: "Stale", root: alphaRoot }] });
+    await Promise.all([reload, closing]);
+    expect(context.config).toBe(original);
+    expect(hub.publish).not.toHaveBeenCalled();
   });
 });

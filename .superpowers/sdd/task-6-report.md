@@ -64,3 +64,29 @@ Implemented live filesystem/config refresh with a process-wide change hub and wa
 - Full: 11 files, 111 tests passed.
 - Typecheck passed.
 - Lint completed with zero errors and the same pre-existing `<img>` warning.
+
+## Lifecycle Review v2
+
+### RED
+
+- Added close-during-reload and close-during-recovery tests; the prior watcher could publish or replace context after shutdown and did not await tracked work.
+- Added overlapping reload coverage with controlled loader completion; the prior implementation had no loader single-flight/version mechanism.
+- Added A→B→A holder coverage; the intermediate runtime previously started after it had already been superseded.
+- Added health-reset coverage; a newly started current runtime previously left the hub degraded.
+- Added repository abort and entry-budget tests; the previous recursive scan ignored both options.
+- Added recovery project/entry budget assertions and verified sequential concurrency remains one.
+
+### GREEN
+
+- `ProjectWatcher` now owns a closed flag, generation token, tracked in-flight set, recovery abort controller, and serialized dirty-version reload loop. All post-await mutations/publications require the current generation.
+- `close()` invalidates the generation first, clears timers, aborts recovery, closes Chokidar, and awaits all entered reload/recovery work.
+- Holder teardown chains the predecessor teardown and runtime close. Superseded holders cannot start; only the current successfully started runtime publishes connected health.
+- `DocumentRepository.getTree` accepts backward-compatible optional `{ signal, maxEntries }`, checking abort/budget throughout recursive traversal.
+- Recovery scans at most 100 projects, at most 100,000 entries per project, sequentially, with a 30-second abort deadline. Budget/deadline failure leaves health degraded and stops the scan.
+
+### Lifecycle v2 Verification
+
+- Focused watcher/events/repository/context: 4 files, 38 tests passed.
+- Full: 11 files, 119 tests passed.
+- Typecheck passed.
+- Lint completed with zero errors and the same pre-existing `<img>` warning.

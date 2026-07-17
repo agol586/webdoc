@@ -24,6 +24,24 @@ export class InvalidHomepageError extends Error {
   }
 }
 
+export class ScanBudgetExceededError extends Error {
+  constructor(limit: number) {
+    super(`Tree scan exceeded the ${limit} entry budget`);
+    this.name = "ScanBudgetExceededError";
+  }
+}
+
+export type TreeScanOptions = { signal?: AbortSignal; maxEntries?: number };
+type ScanState = { signal?: AbortSignal; maxEntries: number; entries: number };
+
+function checkScan(state: ScanState, countEntry = false): void {
+  if (state.signal?.aborted) throw state.signal.reason ?? new DOMException("Tree scan aborted", "AbortError");
+  if (countEntry) {
+    if (state.entries >= state.maxEntries) throw new ScanBudgetExceededError(state.maxEntries);
+    state.entries++;
+  }
+}
+
 function notRegularFile(): NodeJS.ErrnoException {
   const error = new Error("Requested path is not a regular file") as NodeJS.ErrnoException;
   error.code = "EACCES";
@@ -84,16 +102,21 @@ export class DocumentRepository {
     }
   }
 
-  async getTree(project: ProjectConfig): Promise<TreeNode[]> {
-    return this.scanDirectory(project.root, "", new Set([project.root]));
+  async getTree(project: ProjectConfig, options: TreeScanOptions = {}): Promise<TreeNode[]> {
+    const state: ScanState = { signal: options.signal, maxEntries: options.maxEntries ?? Number.POSITIVE_INFINITY, entries: 0 };
+    checkScan(state);
+    return this.scanDirectory(project.root, "", new Set([project.root]), state);
   }
 
-  private async scanDirectory(root: string, relativeDirectory: string, visited: Set<string>): Promise<TreeNode[]> {
+  private async scanDirectory(root: string, relativeDirectory: string, visited: Set<string>, state: ScanState): Promise<TreeNode[]> {
+    checkScan(state);
     const directory = relativeDirectory ? await resolveInsideRoot(root, relativeDirectory) : root;
+    checkScan(state);
     const handle = await opendir(directory);
     const nodes: TreeNode[] = [];
 
     for await (const entry of handle) {
+      checkScan(state, true);
       const relativePath = joinRelative(relativeDirectory, entry.name);
       let canonical: string;
       try {
@@ -101,12 +124,15 @@ export class DocumentRepository {
       } catch {
         continue;
       }
+      checkScan(state);
 
       const metadata = await stat(canonical);
+      checkScan(state);
       if (metadata.isDirectory()) {
         if (visited.has(canonical)) continue;
         visited.add(canonical);
-        const children = await this.scanDirectory(root, relativePath, visited);
+        checkScan(state);
+        const children = await this.scanDirectory(root, relativePath, visited, state);
         nodes.push({ kind: "directory", name: entry.name, path: relativePath, children });
       } else if (metadata.isFile()) {
         nodes.push({

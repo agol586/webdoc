@@ -25,10 +25,14 @@ function getHolder(): ServerHolder {
   const current = globalServer.__webdocServerHolder;
   if (current?.configPath === configPath) return current;
 
-  const teardown = current?.runtimePromise?.then(
-    (runtime) => runtime.watcher.close(),
-    () => undefined,
-  ) ?? Promise.resolve();
+  const teardown = (async () => {
+    await current?.teardown;
+    if (!current?.runtimePromise) return;
+    try {
+      const runtime = await current.runtimePromise;
+      await runtime.watcher.close();
+    } catch {}
+  })();
   const holder = {} as ServerHolder;
   holder.configPath = configPath;
   holder.teardown = teardown;
@@ -48,9 +52,16 @@ export function getLiveRuntime(): Promise<LiveRuntime> {
   const holder = getHolder();
   return holder.runtimePromise ??= (async () => {
     await holder.teardown;
+    if (globalServer.__webdocServerHolder !== holder) throw new Error("Server runtime was superseded");
     const context = await holder.contextPromise;
+    if (globalServer.__webdocServerHolder !== holder) throw new Error("Server runtime was superseded");
     const watcher = new ProjectWatcher(context, changeHub, holder.configPath);
     await watcher.start(context.config);
+    if (globalServer.__webdocServerHolder !== holder) {
+      await watcher.close();
+      throw new Error("Server runtime was superseded");
+    }
+    changeHub.publish({ kind: "status", status: "connected" });
     return { hub: changeHub, watcher, context };
   })().catch((error: unknown) => {
     if (globalServer.__webdocServerHolder === holder) holder.runtimePromise = undefined;

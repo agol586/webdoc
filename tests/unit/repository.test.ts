@@ -57,6 +57,17 @@ describe("DocumentRepository", () => {
     ]);
   });
 
+  it("aborts a tree scan when its entry budget is exhausted", async () => {
+    await Promise.all([writeFile(join(root, "a.md"), "a"), writeFile(join(root, "b.md"), "b")]);
+    await expect(repository.getTree(project, { maxEntries: 1 })).rejects.toThrow(/budget/i);
+  });
+
+  it("honors an aborted tree scan signal", async () => {
+    const abort = new AbortController();
+    abort.abort();
+    await expect(repository.getTree(project, { signal: abort.signal })).rejects.toThrow(/abort/i);
+  });
+
   it("omits escaping and broken symlinks and breaks directory cycles", async () => {
     const outside = await mkdtemp(join(tmpdir(), "webdoc-outside-"));
     await writeFile(join(outside, "secret.md"), "secret");
