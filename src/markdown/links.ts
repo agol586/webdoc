@@ -16,7 +16,7 @@ export interface RewriteRelativeUrlsOptions {
 
 function decodedForSchemeCheck(url: string): string {
   let decoded = url;
-  for (let pass = 0; pass < 3; pass += 1) {
+  for (let pass = 0; pass < 8; pass += 1) {
     try {
       const next = decodeURIComponent(decoded);
       if (next === decoded) break;
@@ -40,17 +40,37 @@ function splitSuffix(url: string): { pathname: string; suffix: string } {
     : { pathname: url.slice(0, suffixIndex), suffix: url.slice(suffixIndex) };
 }
 
-function normalizeContainedPath(documentPath: string, url: string): string {
-  const { pathname, suffix } = splitSuffix(url);
-  let decodedPath = pathname;
-  for (let pass = 0; /%[\da-f]{2}/i.test(decodedPath); pass += 1) {
+function assertRemainingEncodingIsNonStructural(pathname: string, url: string): void {
+  let probe = pathname;
+  for (let pass = 0; /%[\da-f]{2}/i.test(probe); pass += 1) {
     if (pass === 8) throw new Error(`Excessively encoded relative URL: ${url}`);
+    let decoded: string;
     try {
-      decodedPath = decodeURIComponent(decodedPath);
+      decoded = decodeURIComponent(probe);
     } catch {
       throw new Error(`Invalid encoded relative URL: ${url}`);
     }
+
+    const introducedSeparator =
+      decoded.split("/").length > probe.split("/").length ||
+      decoded.split("\\").length > probe.split("\\").length;
+    const hasDotSegment = decoded.split(/[\\/]/).some((segment) => segment === "." || segment === "..");
+    if (introducedSeparator || hasDotSegment || decoded.includes("\0")) {
+      throw new Error(`Unsafe structural encoding rejected: ${url}`);
+    }
+    probe = decoded;
   }
+}
+
+function normalizeContainedPath(documentPath: string, url: string): string {
+  const { pathname, suffix } = splitSuffix(url);
+  let decodedPath: string;
+  try {
+    decodedPath = decodeURIComponent(pathname);
+  } catch {
+    throw new Error(`Invalid encoded relative URL: ${url}`);
+  }
+  assertRemainingEncodingIsNonStructural(decodedPath, url);
   decodedPath = decodedPath.replaceAll("\\", "/");
 
   const base = posix.dirname(documentPath.replaceAll("\\", "/"));
@@ -81,6 +101,12 @@ export function rewriteRelativeUrls(options: RewriteRelativeUrlsOptions) {
 
       const scheme = externalScheme(node.url);
       if (scheme) {
+        if (
+          !node.url.startsWith("//") &&
+          node.url.slice(0, scheme.length + 1).toLowerCase() !== `${scheme}:`
+        ) {
+          throw new Error(`Encoded URL scheme rejected: ${scheme}`);
+        }
         const allowed =
           scheme === "http" || scheme === "https" || (node.type === "link" && scheme === "mailto");
         if (!allowed) throw new Error(`Unsafe URL scheme rejected: ${scheme}`);

@@ -44,6 +44,19 @@ describe("renderMarkdown", () => {
     ).rejects.toThrow(/scheme|unsafe/i);
   });
 
+  it.each(["https%3A//example.com", "http%253A//example.com"])(
+    "rejects an encoded otherwise-allowed scheme: %s",
+    async (url) => {
+      await expect(
+        renderMarkdown({
+          projectId: "alpha",
+          documentPath: "guide/a.md",
+          source: `[encoded scheme](${url})`,
+        }),
+      ).rejects.toThrow(/encoded|scheme|unsafe/i);
+    },
+  );
+
   it("allows only HTTP(S) schemes for external images", async () => {
     await expect(
       renderMarkdown({
@@ -73,9 +86,7 @@ describe("renderMarkdown", () => {
 
   it.each([
     ["%2e%2e/b.md", "/p/alpha/b.md"],
-    ["%252e%252e/b.md", "/p/alpha/b.md"],
     ["sub%2fdoc.md", "/p/alpha/guide/sub/doc.md"],
-    ["sub%252fdoc.md", "/p/alpha/guide/sub/doc.md"],
     ["what%3fname.md", "/p/alpha/guide/what%3Fname.md"],
     ["hash%23name.md", "/p/alpha/guide/hash%23name.md"],
   ])("canonically rewrites encoded relative path %s", async (url, expected) => {
@@ -87,6 +98,29 @@ describe("renderMarkdown", () => {
 
     expect(html).toContain(`href="${expected}"`);
   });
+
+  it("preserves a percent-literal filename after exactly one decode", async () => {
+    const { html } = await renderMarkdown({
+      projectId: "alpha",
+      documentPath: "guide/a.md",
+      source: "[percent](%252541.md)",
+    });
+
+    expect(html).toContain('href="/p/alpha/guide/%252541.md"');
+  });
+
+  it.each(["%252e%252e/b.md", "sub%252fdoc.md", "%252e%252e/%252e%252e/out.md"])(
+    "rejects a path whose remaining encoding becomes structural: %s",
+    async (url) => {
+      await expect(
+        renderMarkdown({
+          projectId: "alpha",
+          documentPath: "guide/a.md",
+          source: `[unsafe](${url})`,
+        }),
+      ).rejects.toThrow(/encoded|unsafe|escape/i);
+    },
+  );
 
   it("resolves a query-only link against the current document and preserves hash-only links", async () => {
     const { html } = await renderMarkdown({
