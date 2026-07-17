@@ -101,6 +101,92 @@ describe("document APIs", () => {
     expect(response.headers.get("content-disposition")).toBe('attachment; filename="archive.bin"');
   });
 
+  it("uses an ASCII fallback and RFC 5987 filename for Unicode attachments", async () => {
+    await writeFile(join(projectRoot, "中文.bin"), "data");
+    const response = await (await routes()).assets(
+      new Request("http://localhost"),
+      context("alpha", ["中文.bin"]),
+    );
+    expect(response.headers.get("content-disposition")).toBe(
+      `attachment; filename=".bin"; filename*=UTF-8''${encodeURIComponent("中文.bin")}`,
+    );
+  });
+
+  it("removes unsafe ASCII controls, quotes, backslashes, and DEL from attachment fallback", async () => {
+    const filename = `a\u0001\"b\\c\u007f.bin`;
+    await writeFile(join(projectRoot, filename), "data");
+    const response = await (await routes()).assets(
+      new Request("http://localhost"),
+      context("alpha", [filename]),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-disposition")).toContain('filename="abc.bin"');
+  });
+
+  it("does not open an asset when header construction fails", async () => {
+    const { DocumentRepository } = await import("../../src/repository/repository");
+    const stream = vi.spyOn(DocumentRepository.prototype, "stream");
+    const NativeHeaders = globalThis.Headers;
+    vi.stubGlobal("Headers", class extends NativeHeaders {
+      constructor() {
+        super();
+        throw new TypeError("header failure");
+      }
+    });
+    try {
+      const response = await (await routes()).assets(
+        new Request("http://localhost"),
+        context("alpha", ["archive.bin"]),
+      );
+      expect(response.status).toBe(500);
+      expect(stream).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("closes an opened asset when response construction fails", async () => {
+    const { DocumentRepository } = await import("../../src/repository/repository");
+    const close = vi.fn();
+    vi.spyOn(DocumentRepository.prototype, "stream").mockResolvedValue({
+      body: new ReadableStream<Uint8Array>(),
+      size: 1,
+      mtimeMs: 1,
+      close,
+    });
+    const NativeResponse = globalThis.Response;
+    vi.stubGlobal("Response", class extends NativeResponse {
+      constructor(body?: BodyInit | null, init?: ResponseInit) {
+        if (body instanceof ReadableStream) throw new TypeError("response failure");
+        super(body, init);
+      }
+
+      static json(data: unknown, init?: ResponseInit): Response {
+        return NativeResponse.json(data, init);
+      }
+    });
+    try {
+      const response = await (await routes()).assets(
+        new Request("http://localhost"),
+        context("alpha", ["archive.bin"]),
+      );
+      expect(response.status).toBe(500);
+      expect(close).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each(["percent%.md", "literal%2F.md"])("serves decoded literal filename %s", async (filename) => {
+    await writeFile(join(projectRoot, filename), `# ${filename}`);
+    const response = await (await routes()).content(
+      new Request("http://localhost"),
+      context("alpha", [filename]),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ path: filename });
+  });
+
   it("returns 404 for an unknown project", async () => {
     const response = await (await routes()).tree(new Request("http://localhost"), context("missing"));
     expect(response.status).toBe(404);
@@ -166,5 +252,18 @@ describe("document APIs", () => {
     await rm(projectRoot, { recursive: true });
     const response = await tree(new Request("http://localhost"), context("alpha"));
     expect(response.status).toBe(503);
+  });
+
+  it("retries server context initialization after a rejected config load", async () => {
+    const configPath = join(fixture, "webdoc.config.yaml");
+    await writeFile(configPath, "projects: []\n");
+    const { projects } = await routes();
+    expect((await projects()).status).toBe(500);
+    await writeFile(
+      configPath,
+      "projects:\n  - id: alpha\n    title: Alpha\n    path: ./alpha\n",
+    );
+    const response = await projects();
+    expect(response.status).toBe(200);
   });
 });

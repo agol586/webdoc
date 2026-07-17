@@ -12,7 +12,8 @@ export async function GET(_request: Request, routeContext: RouteContext): Promis
     if (!project) return json({ error: "Project not found" }, { status: 404 });
     if (!(await repository.isAvailable(project))) return unavailableResponse();
     const path = segments.join("/");
-    const source = await repository.read(project, path, config.limits.markdownBytes);
+    const repositoryPath = segments.map(encodeURIComponent).join("/");
+    const source = await repository.read(project, repositoryPath, config.limits.markdownBytes);
     const rendered = await renderMarkdown({ projectId, documentPath: path, source: source.toString("utf8") });
     return json({ path, ...rendered });
   } catch (error) {

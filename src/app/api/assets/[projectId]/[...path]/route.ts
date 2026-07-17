@@ -15,8 +15,17 @@ const inlineTypes: Record<string, string> = {
   ".webp": "image/webp",
 };
 
-function safeFilename(path: string): string {
-  return basename(path).replace(/["\\\r\n]/g, "_") || "download";
+function encodeRFC5987(value: string): string {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (character) =>
+    `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+function contentDisposition(path: string): string {
+  const original = basename(path) || "download";
+  const fallback = original.replace(/[^\x20-\x7e]|["\\\x7f]/g, "") || "download";
+  const extended = original === fallback ? "" : `; filename*=UTF-8''${encodeRFC5987(original)}`;
+  return `attachment; filename=\"${fallback}\"${extended}`;
 }
 
 export async function GET(_request: Request, routeContext: RouteContext): Promise<Response> {
@@ -27,22 +36,28 @@ export async function GET(_request: Request, routeContext: RouteContext): Promis
     if (!project) return json({ error: "Project not found" }, { status: 404 });
     if (!(await repository.isAvailable(project))) return unavailableResponse();
     const path = segments.join("/");
-    const asset = await repository.stream(project, path, config.limits.assetBytes);
     const contentType = inlineTypes[extname(path).toLowerCase()] ?? "application/octet-stream";
     const headers = new Headers({
       "Content-Type": contentType,
-      "Content-Length": String(asset.size),
       "X-Content-Type-Options": "nosniff",
-      ETag: `\"${asset.size.toString(16)}-${Math.trunc(asset.mtimeMs).toString(16)}\"`,
-      "Last-Modified": new Date(asset.mtimeMs).toUTCString(),
     });
     if (contentType === "image/svg+xml") {
       headers.set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox; script-src 'none'");
     }
     if (contentType === "application/octet-stream") {
-      headers.set("Content-Disposition", `attachment; filename=\"${safeFilename(path)}\"`);
+      headers.set("Content-Disposition", contentDisposition(path));
     }
-    return new Response(asset.body, { headers });
+    const repositoryPath = segments.map(encodeURIComponent).join("/");
+    const asset = await repository.stream(project, repositoryPath, config.limits.assetBytes);
+    try {
+      headers.set("Content-Length", String(asset.size));
+      headers.set("ETag", `\"${asset.size.toString(16)}-${Math.trunc(asset.mtimeMs).toString(16)}\"`);
+      headers.set("Last-Modified", new Date(asset.mtimeMs).toUTCString());
+      return new Response(asset.body, { headers });
+    } catch (error) {
+      asset.close();
+      throw error;
+    }
   } catch (error) {
     return errorResponse(error);
   }

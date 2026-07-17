@@ -1,12 +1,16 @@
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { ProjectConfig } from "../../src/config/load";
 import { DocumentRepository, FileTooLargeError } from "../../src/repository/repository";
 import type { TreeNode } from "../../src/repository/types";
+
+const execFileAsync = promisify(execFile);
 
 function names(nodes: TreeNode[]): string[] {
   return nodes.map((node) => node.name);
@@ -104,5 +108,41 @@ describe("DocumentRepository", () => {
     await writeFile(join(root, "guide.md"), "guide");
     expect(await repository.read(project, "guide.md", 8)).toEqual(Buffer.from("guide"));
     await expect(repository.read(project, "../secret.md", 8)).rejects.toThrow(/outside/i);
+  });
+
+  it("rejects directories as content and assets", async () => {
+    await mkdir(join(root, "folder"));
+    await expect(repository.read(project, "folder", 8)).rejects.toMatchObject({ code: "EACCES" });
+    await expect(repository.stream(project, "folder", 8)).rejects.toMatchObject({ code: "EACCES" });
+  });
+
+  it("rejects a FIFO before attempting a blocking read", async () => {
+    const fifo = join(root, "pipe.md");
+    await execFileAsync("mkfifo", [fifo]);
+    let releaseWriter: ReturnType<typeof setTimeout> | undefined;
+    const writer = new Promise<void>((resolve) => {
+      releaseWriter = setTimeout(() => {
+        void writeFile(fifo, "release").then(() => resolve(), () => resolve());
+      }, 200);
+    });
+
+    try {
+      await expect(
+        Promise.race([
+          repository.read(project, "pipe.md", 8),
+          new Promise<Buffer>((_, reject) => setTimeout(() => reject(new Error("FIFO read blocked")), 100)),
+        ]),
+      ).rejects.toMatchObject({ code: "EACCES" });
+    } finally {
+      if (releaseWriter) clearTimeout(releaseWriter);
+      // If a buggy implementation opened the FIFO, release it before test cleanup.
+      await Promise.race([writer, new Promise<void>((resolve) => setTimeout(resolve, 250))]);
+    }
+  });
+
+  it("reads an internal symlink through its canonical target", async () => {
+    await writeFile(join(root, "target.md"), "target");
+    await symlink(join(root, "target.md"), join(root, "alias.md"));
+    expect(await repository.read(project, "alias.md", 8)).toEqual(Buffer.from("target"));
   });
 });

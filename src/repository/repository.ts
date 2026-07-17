@@ -1,6 +1,5 @@
-import { once } from "node:events";
-import { createReadStream } from "node:fs";
-import { access, opendir, readFile, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, open, opendir, stat } from "node:fs/promises";
 import { extname } from "node:path";
 import { Readable } from "node:stream";
 
@@ -24,6 +23,17 @@ export class InvalidHomepageError extends Error {
     this.name = "InvalidHomepageError";
   }
 }
+
+function notRegularFile(): NodeJS.ErrnoException {
+  const error = new Error("Requested path is not a regular file") as NodeJS.ErrnoException;
+  error.code = "EACCES";
+  return error;
+}
+
+const safeOpenFlags =
+  constants.O_RDONLY |
+  (constants.O_NOFOLLOW ?? 0) |
+  (constants.O_NONBLOCK ?? 0);
 
 function joinRelative(parent: string, name: string): string {
   return parent ? `${parent}/${name}` : name;
@@ -117,30 +127,45 @@ export class DocumentRepository {
 
   async read(project: ProjectConfig, path: string, limit: number): Promise<Buffer> {
     const canonical = await resolveInsideRoot(project.root, path);
-    const metadata = await stat(canonical);
-    if (metadata.size > limit) throw new FileTooLargeError(path, metadata.size, limit);
-    return readFile(canonical);
+    if (!(await stat(canonical)).isFile()) throw notRegularFile();
+    const handle = await open(canonical, safeOpenFlags);
+    try {
+      const metadata = await handle.stat();
+      if (!metadata.isFile()) throw notRegularFile();
+      if (metadata.size > limit) throw new FileTooLargeError(path, metadata.size, limit);
+      return await handle.readFile();
+    } finally {
+      await handle.close();
+    }
   }
 
   async stream(
     project: ProjectConfig,
     path: string,
     limit: number,
-  ): Promise<{ body: ReadableStream<Uint8Array>; size: number; mtimeMs: number }> {
+  ): Promise<{
+    body: ReadableStream<Uint8Array>;
+    size: number;
+    mtimeMs: number;
+    close: () => void;
+  }> {
     const canonical = await resolveInsideRoot(project.root, path);
-    const metadata = await stat(canonical);
-    if (metadata.size > limit) throw new FileTooLargeError(path, metadata.size, limit);
-    if (!metadata.isFile()) {
-      const error = new Error("Requested asset is not a file") as NodeJS.ErrnoException;
-      error.code = "EACCES";
+    if (!(await stat(canonical)).isFile()) throw notRegularFile();
+    const handle = await open(canonical, safeOpenFlags);
+    try {
+      const metadata = await handle.stat();
+      if (!metadata.isFile()) throw notRegularFile();
+      if (metadata.size > limit) throw new FileTooLargeError(path, metadata.size, limit);
+      const stream = handle.createReadStream({ autoClose: true });
+      return {
+        body: Readable.toWeb(stream) as ReadableStream<Uint8Array>,
+        size: metadata.size,
+        mtimeMs: metadata.mtimeMs,
+        close: () => stream.destroy(),
+      };
+    } catch (error) {
+      await handle.close();
       throw error;
     }
-    const stream = createReadStream(canonical);
-    await once(stream, "open");
-    return {
-      body: Readable.toWeb(stream) as ReadableStream<Uint8Array>,
-      size: metadata.size,
-      mtimeMs: metadata.mtimeMs,
-    };
   }
 }

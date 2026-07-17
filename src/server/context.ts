@@ -8,9 +8,16 @@ export type ServerContext = { config: WebDocConfig; repository: DocumentReposito
 let contextPromise: Promise<ServerContext> | undefined;
 
 export function getServerContext(): Promise<ServerContext> {
-  contextPromise ??= createServerContext(
-    process.env.WEBDOC_CONFIG ?? resolve(process.cwd(), "webdoc.config.yaml"),
-  );
+  if (!contextPromise) {
+    const pending = createServerContext(
+      process.env.WEBDOC_CONFIG ?? resolve(process.cwd(), "webdoc.config.yaml"),
+    );
+    const wrapped = pending.catch((error: unknown) => {
+      if (contextPromise === wrapped) contextPromise = undefined;
+      throw error;
+    });
+    contextPromise = wrapped;
+  }
   return contextPromise;
 }
 
