@@ -48,9 +48,12 @@ export class ProjectWatcher {
     }
     for (const [projectId, root] of this.roots) {
       const path = relative(root, changedPath);
-      if (path && path !== ".." && !path.startsWith(`..${sep}`)) {
+      if (path !== ".." && !path.startsWith(`..${sep}`)) {
         const portablePath = path.split(sep).join("/");
-        this.debounce(`${projectId}:${portablePath}`, () => this.hub.publish({ kind: "project", projectId, path: portablePath }));
+        this.debounce(`${projectId}:${portablePath}`, () => {
+          if (this.roots.get(projectId) !== root) return;
+          this.hub.publish(portablePath ? { kind: "project", projectId, path: portablePath } : { kind: "project", projectId });
+        });
         return;
       }
     }
@@ -74,7 +77,16 @@ export class ProjectWatcher {
       const added = [...nextRoots].filter((root) => !priorRoots.has(root));
       if (removed.length) await this.handle?.unwatch(removed.length === 1 ? removed[0] : removed);
       if (added.length) this.handle?.add(added.length === 1 ? added[0] : added);
-      this.roots = new Map(next.projects.map((project) => [project.id, project.root]));
+      const nextMappings = new Map(next.projects.map((project) => [project.id, project.root]));
+      for (const [key, timer] of this.timers) {
+        if (key === "config") continue;
+        const projectId = key.slice(0, key.indexOf(":"));
+        if (this.roots.get(projectId) !== nextMappings.get(projectId)) {
+          clearTimeout(timer);
+          this.timers.delete(key);
+        }
+      }
+      this.roots = nextMappings;
       this.context.config = next;
       this.hub.publish({ kind: "config" });
       this.hub.publish({ kind: "status", status: "connected" });
@@ -88,7 +100,7 @@ export class ProjectWatcher {
     this.rescanning = true;
     this.hub.publish({ kind: "status", status: "degraded" });
     try {
-      await Promise.all(this.context.config.projects.map((project) => this.context.repository.getTree(project)));
+      for (const project of this.context.config.projects) await this.context.repository.getTree(project);
       this.hub.publish({ kind: "status", status: "connected" });
       for (const project of this.context.config.projects) this.hub.publish({ kind: "project", projectId: project.id });
     } catch {
@@ -96,5 +108,13 @@ export class ProjectWatcher {
     } finally {
       this.rescanning = false;
     }
+  }
+
+  async close(): Promise<void> {
+    for (const timer of this.timers.values()) clearTimeout(timer);
+    this.timers.clear();
+    const handle = this.handle;
+    this.handle = undefined;
+    await handle?.close();
   }
 }

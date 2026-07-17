@@ -38,3 +38,29 @@ Implemented live filesystem/config refresh with a process-wide change hub and wa
 
 - Recovery rescans every configured project because the generic Chokidar error callback does not identify a reliable affected root.
 - Native `EventSource` exposes reconnect timing to the browser; the UI deliberately remains usable while disconnected.
+
+## Review Changes
+
+### RED
+
+- Added HMR/config-path identity coverage proving reloaded modules share the exact context and a path change closes the prior watcher.
+- Added health snapshot tests proving degraded state is replayed to late subscribers.
+- Added a 150-event slow-subscriber test proving bounded queues preserve config and current status.
+- Added watcher tests for removed-root timer cancellation, root directory events, single recovery execution, and maximum rescan concurrency of one.
+- The focused run failed in all newly covered old behaviors: missing health replay, stale timer publication, missing root event, parallel rescans, and absent shared runtime context.
+
+### GREEN
+
+- Moved context and runtime promises into one process-global holder keyed by absolute config path; new-path runtime startup waits for the old watcher to close.
+- Persisted health in `ChangeHub`, initialized connected, updated it on status publication, and queued the current snapshot for every subscriber/SSE stream.
+- Changed bounded queues to coalesce project/path, config, and status events and preferentially evict project events.
+- Reconciliation now clears timers for removed or remapped projects, and each callback revalidates its project/root mapping before publishing.
+- Root add/remove events publish a project-wide event without a path.
+- Recovery now uses one active loop with sequential project scans and exposes `ProjectWatcher.close()` for lifecycle cleanup.
+
+### Review Verification
+
+- Focused: 3 files, 11 tests passed.
+- Full: 11 files, 111 tests passed.
+- Typecheck passed.
+- Lint completed with zero errors and the same pre-existing `<img>` warning.

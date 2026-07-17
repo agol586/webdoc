@@ -12,7 +12,6 @@ export async function GET(request: Request): Promise<Response> {
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ kind: "status", status: "connected" })}\n\n`));
       heartbeat = setInterval(() => controller.enqueue(encoder.encode(": heartbeat\n\n")), 15_000);
       iterator = hub.subscribe(request.signal)[Symbol.asyncIterator]();
       try {

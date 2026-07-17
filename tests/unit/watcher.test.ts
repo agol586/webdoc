@@ -89,4 +89,57 @@ describe("ProjectWatcher", () => {
     expect(handle.add).toHaveBeenCalledWith(betaRoot);
     expect(hub.publish).toHaveBeenCalledWith({ kind: "config" });
   });
+
+  it("drops pending events when their project root is removed", async () => {
+    const hub = { publish: vi.fn() } as unknown as ChangeHub;
+    const context: ServerContext = { config: { server: { host: "127.0.0.1", port: 3000 }, limits: { markdownBytes: 1, assetBytes: 1 }, projects: [{ id: "alpha", title: "Alpha", root: alphaRoot }] }, repository: new DocumentRepository() };
+    const watcher = new ProjectWatcher(context, hub, configPath, () => fakeWatch());
+    await watcher.start(context.config);
+    emit("change", join(alphaRoot, "stale.md"));
+    const betaRoot = join(fixture, "beta");
+    await mkdir(betaRoot);
+    await writeFile(configPath, "projects:\n  - id: beta\n    title: Beta\n    path: ./beta\n");
+    await watcher.reloadConfig();
+    (hub.publish as ReturnType<typeof vi.fn>).mockClear();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(hub.publish).not.toHaveBeenCalled();
+  });
+
+  it("publishes project refresh without a path for a root directory event", async () => {
+    const hub = { publish: vi.fn() } as unknown as ChangeHub;
+    const context: ServerContext = { config: { server: { host: "127.0.0.1", port: 3000 }, limits: { markdownBytes: 1, assetBytes: 1 }, projects: [{ id: "alpha", title: "Alpha", root: alphaRoot }] }, repository: new DocumentRepository() };
+    const watcher = new ProjectWatcher(context, hub, configPath, () => fakeWatch());
+    await watcher.start(context.config);
+    emit("unlinkDir", alphaRoot);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(hub.publish).toHaveBeenCalledWith({ kind: "project", projectId: "alpha" });
+  });
+
+  it("runs one recovery at a time and rescans projects sequentially", async () => {
+    const hub = { publish: vi.fn() } as unknown as ChangeHub;
+    let active = 0;
+    let maximum = 0;
+    const releases: Array<() => void> = [];
+    const repository = new DocumentRepository();
+    vi.spyOn(repository, "getTree").mockImplementation(async () => {
+      active++;
+      maximum = Math.max(maximum, active);
+      await new Promise<void>((resolve) => releases.push(resolve));
+      active--;
+      return [];
+    });
+    const betaRoot = join(fixture, "beta");
+    await mkdir(betaRoot);
+    const context: ServerContext = { config: { server: { host: "127.0.0.1", port: 3000 }, limits: { markdownBytes: 1, assetBytes: 1 }, projects: [{ id: "alpha", title: "Alpha", root: alphaRoot }, { id: "beta", title: "Beta", root: betaRoot }] }, repository };
+    const watcher = new ProjectWatcher(context, hub, configPath, () => fakeWatch());
+    await watcher.start(context.config);
+    emit("error", new Error("overflow"));
+    emit("error", new Error("again"));
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    releases.shift()!();
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    releases.shift()!();
+    await vi.waitFor(() => expect(repository.getTree).toHaveBeenCalledTimes(2));
+    expect(maximum).toBe(1);
+  });
 });

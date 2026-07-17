@@ -16,26 +16,39 @@ const MAX_PENDING_EVENTS = 100;
 
 export class ChangeHub {
   private readonly subscribers = new Set<Subscriber>();
+  private health: "connected" | "degraded" = "connected";
 
   get subscriberCount(): number {
     return this.subscribers.size;
   }
 
   publish(event: ChangeEvent): void {
+    if (event.kind === "status" && event.status) this.health = event.status;
     for (const subscriber of this.subscribers) {
       if (subscriber.waiting) {
         const resolve = subscriber.waiting;
         subscriber.waiting = undefined;
         resolve({ done: false, value: event });
       } else {
-        if (subscriber.queue.length === MAX_PENDING_EVENTS) subscriber.queue.shift();
-        subscriber.queue.push(event);
+        this.enqueue(subscriber.queue, event);
       }
     }
   }
 
+  private enqueue(queue: ChangeEvent[], event: ChangeEvent): void {
+    const same = event.kind === "project"
+      ? queue.findIndex((queued) => queued.kind === "project" && queued.projectId === event.projectId && queued.path === event.path)
+      : queue.findIndex((queued) => queued.kind === event.kind);
+    if (same >= 0) queue.splice(same, 1);
+    if (queue.length === MAX_PENDING_EVENTS) {
+      const project = queue.findIndex((queued) => queued.kind === "project");
+      queue.splice(project >= 0 ? project : 0, 1);
+    }
+    queue.push(event);
+  }
+
   subscribe(signal: AbortSignal): AsyncIterable<ChangeEvent> {
-    const subscriber: Subscriber = { queue: [], closed: false, cleanup: () => undefined };
+    const subscriber: Subscriber = { queue: [{ kind: "status", status: this.health }], closed: false, cleanup: () => undefined };
     const close = () => {
       if (subscriber.closed) return;
       subscriber.closed = true;
