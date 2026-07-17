@@ -1,5 +1,8 @@
-import { opendir, readFile, stat } from "node:fs/promises";
+import { once } from "node:events";
+import { createReadStream } from "node:fs";
+import { access, opendir, readFile, stat } from "node:fs/promises";
 import { extname } from "node:path";
+import { Readable } from "node:stream";
 
 import type { ProjectConfig } from "../config/load";
 import { resolveInsideRoot } from "../lib/path-policy";
@@ -43,6 +46,15 @@ function sortNodes(nodes: TreeNode[]): TreeNode[] {
 }
 
 export class DocumentRepository {
+  async isAvailable(project: ProjectConfig): Promise<boolean> {
+    try {
+      await access(project.root);
+      return (await stat(project.root)).isDirectory();
+    } catch {
+      return false;
+    }
+  }
+
   async getTree(project: ProjectConfig): Promise<TreeNode[]> {
     return this.scanDirectory(project.root, "", new Set([project.root]));
   }
@@ -108,5 +120,27 @@ export class DocumentRepository {
     const metadata = await stat(canonical);
     if (metadata.size > limit) throw new FileTooLargeError(path, metadata.size, limit);
     return readFile(canonical);
+  }
+
+  async stream(
+    project: ProjectConfig,
+    path: string,
+    limit: number,
+  ): Promise<{ body: ReadableStream<Uint8Array>; size: number; mtimeMs: number }> {
+    const canonical = await resolveInsideRoot(project.root, path);
+    const metadata = await stat(canonical);
+    if (metadata.size > limit) throw new FileTooLargeError(path, metadata.size, limit);
+    if (!metadata.isFile()) {
+      const error = new Error("Requested asset is not a file") as NodeJS.ErrnoException;
+      error.code = "EACCES";
+      throw error;
+    }
+    const stream = createReadStream(canonical);
+    await once(stream, "open");
+    return {
+      body: Readable.toWeb(stream) as ReadableStream<Uint8Array>,
+      size: metadata.size,
+      mtimeMs: metadata.mtimeMs,
+    };
   }
 }
