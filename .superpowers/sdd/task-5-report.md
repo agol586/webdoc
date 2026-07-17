@@ -36,3 +36,17 @@ All passed. Build emits an existing Turbopack NFT tracing warning related to dyn
 - Mermaid fallback uses `textContent`, preventing failed diagram source from becoming executable markup.
 - Next 16 server/client serialization constraints are respected.
 - No server repository object crosses into a client component.
+
+## Review follow-up RED/GREEN
+
+- **Asset navigation RED:** expanded the tree test with image and attachment nodes. It failed because directories had no link and attachments still used `/p`. **GREEN:** image nodes keep stable `/p/...` deep links, attachment nodes use `/api/assets/...`, and directory summaries contain real stable links.
+- **Drawer focus RED:** added a keyboard test that opened the drawer, expected initial focus, wrapped backward with Shift+Tab, closed with Escape, and expected trigger focus restoration. It failed because focus escaped to the desktop tree. **GREEN:** drawer key handling now traps Tab/Shift+Tab, handles Escape, and restores the trigger.
+- **Image preview RED:** added a test for a deep-linked image rendered from the safe asset endpoint. It failed because `ImageView` did not exist. **GREEN:** `/p/:projectId/:imagePath` now renders an `<img>` in the reader pane using the encoded `/api/assets/...` URL.
+- **Error classification RED:** added focused classification tests; they initially failed because no page error classifier existed. **GREEN:** only `ENOENT` and `ENOTDIR` become 404s; `EACCES`, `FileTooLargeError`, `PathPolicyError`, and internal renderer errors propagate.
+
+### Follow-up verification
+
+- `npm test -- tests/unit/components.test.tsx tests/unit/page-errors.test.ts`: 11 tests passed.
+- `npm run typecheck`: passed.
+- `npm test`: 7 files and 97 tests passed.
+- `npm run build`: passed with the same non-fatal Turbopack NFT tracing warning noted above.

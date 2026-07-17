@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
 import type { TreeNode } from "../repository/types";
@@ -27,6 +27,28 @@ export function AppShell({ projects, activeId, nodes, activePath, children }: {
     toggleRef.current?.focus();
   }
 
+  function handleDrawerKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeDrawer();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = [...(drawerRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), summary, select, [tabindex]:not([tabindex="-1"])',
+    ) ?? [])].filter((element) => !element.hasAttribute("disabled"));
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   const tree = <FileTree projectId={activeId} nodes={nodes} activePath={activePath} />;
   return (
     <div className="app-shell">
@@ -39,7 +61,7 @@ export function AppShell({ projects, activeId, nodes, activePath, children }: {
       <div className="reader-layout">
         <nav className="document-tree desktop-tree" aria-label="Document tree">{tree}</nav>
         {drawerOpen && <div className="drawer-backdrop" onMouseDown={closeDrawer}>
-          <nav ref={drawerRef} id="mobile-tree" className="document-tree mobile-tree" aria-label="Document tree" onMouseDown={(event) => event.stopPropagation()}>
+          <nav ref={drawerRef} id="mobile-tree" className="document-tree mobile-tree" aria-label="Document tree" onKeyDown={handleDrawerKeyDown} onMouseDown={(event) => event.stopPropagation()}>
             <button className="drawer-close" onClick={closeDrawer}>Close</button>
             {tree}
           </nav>

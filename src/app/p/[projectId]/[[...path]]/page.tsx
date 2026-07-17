@@ -1,8 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 
 import { AppShell } from "../../../../components/app-shell";
-import { DocumentView } from "../../../../components/document-view";
+import { DocumentView, ImageView } from "../../../../components/document-view";
 import { renderMarkdown } from "../../../../markdown/render";
+import { isMissingDocumentError } from "../../../../lib/page-errors";
 import type { TreeNode } from "../../../../repository/types";
 import { getServerContext } from "../../../../server/context";
 
@@ -56,6 +57,7 @@ export default async function ProjectPage({ params }: PageProps) {
     homepage: await repository.chooseHomepage({ id, title, ...candidate }).catch(() => null),
   })));
   let documentPath = segments.join("/");
+  let imagePath: string | null = null;
 
   if (!documentPath) {
     documentPath = await repository.chooseHomepage(project, tree) ?? firstMarkdown(tree) ?? "";
@@ -66,6 +68,9 @@ export default async function ProjectPage({ params }: PageProps) {
     if (node.kind === "directory") {
       const homepage = directoryHomepage(node);
       if (homepage) redirect(route(projectId, homepage));
+      documentPath = "";
+    } else if (node.kind === "image") {
+      imagePath = documentPath;
       documentPath = "";
     } else if (node.kind !== "markdown") {
       notFound();
@@ -78,14 +83,15 @@ export default async function ProjectPage({ params }: PageProps) {
       const repositoryPath = documentPath.split("/").map(encodeURIComponent).join("/");
       const source = await repository.read(project, repositoryPath, config.limits.markdownBytes);
       content = await renderMarkdown({ projectId, documentPath, source: source.toString("utf8") });
-    } catch {
-      notFound();
+    } catch (error) {
+      if (isMissingDocumentError(error)) notFound();
+      throw error;
     }
   }
 
   return (
     <AppShell projects={projects} activeId={projectId} nodes={tree} activePath={documentPath || undefined}>
-      {content ? <DocumentView {...content} path={documentPath} /> : (
+      {imagePath ? <ImageView projectId={projectId} path={imagePath} /> : content ? <DocumentView {...content} path={documentPath} /> : (
         <section className="empty-state"><h1>{project.title}</h1><p>This project has no Markdown documents.</p></section>
       )}
     </AppShell>
