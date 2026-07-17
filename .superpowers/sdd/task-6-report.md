@@ -90,3 +90,23 @@ Implemented live filesystem/config refresh with a process-wide change hub and wa
 - Full: 11 files, 119 tests passed.
 - Typecheck passed.
 - Lint completed with zero errors and the same pre-existing `<img>` warning.
+
+## Lifecycle Review v3
+
+### RED
+
+- Added an actual-watch-set A→B→A race test with blocked `unwatch`; the previous desired-root comparison left Chokidar watching no project root.
+- Added a blocked recovery plus invalid-reload interleaving test; the previous recovery signal remained active and could later restore connected health from a stale snapshot.
+
+### GREEN
+
+- Added `watchedRoots` as the source of truth for Chokidar reconciliation. Successful add/unwatch operations update it immediately, even when that reload version becomes stale, so the next loop compensates actual watcher state.
+- Every reload request now advances `configEpoch` and aborts active recovery before loading or validation.
+- Recovery captures both epoch and project snapshot, and validates generation/epoch after every scan and before every status/project publication.
+
+### Lifecycle v3 Verification
+
+- Focused watcher/events/repository/context: 4 files, 40 tests passed.
+- Full: 11 files, 121 tests passed.
+- Typecheck passed.
+- Lint completed with zero errors and the same pre-existing `<img>` warning.

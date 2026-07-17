@@ -208,4 +208,54 @@ describe("ProjectWatcher", () => {
     expect(context.config).toBe(original);
     expect(hub.publish).not.toHaveBeenCalled();
   });
+
+  it("compensates actual watched roots when A to B reconcile becomes stale and returns to A", async () => {
+    const betaRoot = join(fixture, "beta");
+    await mkdir(betaRoot);
+    const actual = new Set([alphaRoot]);
+    let releaseUnwatch!: () => void;
+    const handle = fakeWatch();
+    handle.unwatch = vi.fn(async (paths: string | readonly string[]) => {
+      await new Promise<void>((resolve) => { releaseUnwatch = resolve; });
+      for (const path of typeof paths === "string" ? [paths] : paths) actual.delete(path);
+    });
+    handle.add = vi.fn((paths: string | readonly string[]) => {
+      for (const path of typeof paths === "string" ? [paths] : paths) actual.add(path);
+    });
+    const original = { server: { host: "127.0.0.1", port: 3000 }, limits: { markdownBytes: 1, assetBytes: 1 }, projects: [{ id: "alpha", title: "Alpha", root: alphaRoot }] };
+    const context: ServerContext = { config: original, repository: new DocumentRepository() };
+    const configs = [
+      { ...original, projects: [{ id: "beta", title: "Beta", root: betaRoot }] },
+      original,
+    ];
+    const watcher = new ProjectWatcher(context, { publish: vi.fn() } as unknown as ChangeHub, configPath, () => handle, async () => configs.shift()!);
+    await watcher.start(original);
+    const first = watcher.reloadConfig();
+    await vi.waitFor(() => expect(releaseUnwatch).toBeTypeOf("function"));
+    const second = watcher.reloadConfig();
+    releaseUnwatch();
+    await Promise.all([first, second]);
+    expect(actual).toEqual(new Set([alphaRoot]));
+    expect(handle.add).toHaveBeenCalledWith(alphaRoot);
+  });
+
+  it("invalid reload aborts an older recovery and it never restores connected health", async () => {
+    const hub = { publish: vi.fn() } as unknown as ChangeHub;
+    const repository = new DocumentRepository();
+    let recoverySignal: AbortSignal | undefined;
+    vi.spyOn(repository, "getTree").mockImplementation(async (_project, options) => {
+      recoverySignal = options?.signal;
+      await new Promise<void>((_resolve, reject) => options?.signal?.addEventListener("abort", () => reject(options.signal?.reason), { once: true }));
+      return [];
+    });
+    const context: ServerContext = { config: { server: { host: "127.0.0.1", port: 3000 }, limits: { markdownBytes: 1, assetBytes: 1 }, projects: [{ id: "alpha", title: "Alpha", root: alphaRoot }] }, repository };
+    const watcher = new ProjectWatcher(context, hub, configPath, () => fakeWatch(), async () => { throw new Error("invalid"); });
+    await watcher.start(context.config);
+    emit("error", new Error("overflow"));
+    await vi.waitFor(() => expect(repository.getTree).toHaveBeenCalled());
+    await watcher.reloadConfig();
+    expect(recoverySignal?.aborted).toBe(true);
+    await vi.waitFor(() => expect(hub.publish).toHaveBeenCalledWith({ kind: "status", status: "degraded" }));
+    expect(hub.publish).not.toHaveBeenCalledWith({ kind: "status", status: "connected" });
+  });
 });

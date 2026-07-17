@@ -19,6 +19,7 @@ type ConfigLoader = (path: string) => Promise<WebDocConfig>;
 export class ProjectWatcher {
   private handle?: WatchHandle;
   private roots = new Map<string, string>();
+  private watchedRoots = new Set<string>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
   private rescanning = false;
   private closed = false;
@@ -26,6 +27,7 @@ export class ProjectWatcher {
   private readonly inFlight = new Set<Promise<unknown>>();
   private recoveryAbort?: AbortController;
   private reloadVersion = 0;
+  private configEpoch = 0;
   private reloadLoop?: Promise<void>;
 
   constructor(
@@ -40,6 +42,7 @@ export class ProjectWatcher {
     if (this.closed) throw new Error("Cannot start a closed project watcher");
     if (this.handle) return;
     this.roots = new Map(config.projects.map((project) => [project.id, project.root]));
+    this.watchedRoots = new Set(this.roots.values());
     this.handle = this.watch([this.configPath, ...this.roots.values()]);
     for (const event of ["add", "change", "unlink", "addDir", "unlinkDir"]) {
       this.handle.on(event, (path) => this.onChange(String(path)));
@@ -82,6 +85,8 @@ export class ProjectWatcher {
   reloadConfig(): Promise<void> {
     if (this.closed) return Promise.resolve();
     this.reloadVersion++;
+    this.configEpoch++;
+    this.recoveryAbort?.abort(new DOMException("Configuration reload requested", "AbortError"));
     if (!this.reloadLoop) {
       const loop = this.runReloads();
       this.reloadLoop = loop;
@@ -100,14 +105,21 @@ export class ProjectWatcher {
         const next = await this.load(this.configPath);
         if (!this.isCurrent(token)) return;
         if (version !== this.reloadVersion) { completed = version; continue; }
-        const priorRoots = new Set(this.roots.values());
         const nextRoots = new Set(next.projects.map((project) => project.root));
-        const removed = [...priorRoots].filter((root) => !nextRoots.has(root));
-        const added = [...nextRoots].filter((root) => !priorRoots.has(root));
-        if (removed.length) await this.handle?.unwatch(removed.length === 1 ? removed[0] : removed);
+        const removed = [...this.watchedRoots].filter((root) => !nextRoots.has(root));
+        const added = [...nextRoots].filter((root) => !this.watchedRoots.has(root));
+        if (removed.length) {
+          await this.handle?.unwatch(removed.length === 1 ? removed[0] : removed);
+          for (const root of removed) this.watchedRoots.delete(root);
+        }
         if (!this.isCurrent(token)) return;
         if (version !== this.reloadVersion) { completed = version; continue; }
-        if (added.length) this.handle?.add(added.length === 1 ? added[0] : added);
+        if (added.length) {
+          await this.handle?.add(added.length === 1 ? added[0] : added);
+          for (const root of added) this.watchedRoots.add(root);
+        }
+        if (!this.isCurrent(token)) return;
+        if (version !== this.reloadVersion) { completed = version; continue; }
         const nextMappings = new Map(next.projects.map((project) => [project.id, project.root]));
         for (const [key, timer] of this.timers) {
           if (key === "config") continue;
@@ -133,18 +145,24 @@ export class ProjectWatcher {
     if (this.rescanning || this.closed) return;
     this.rescanning = true;
     const token = this.generation;
+    const epoch = this.configEpoch;
+    const projects = [...this.context.config.projects];
     const abort = new AbortController();
     this.recoveryAbort = abort;
     const deadline = setTimeout(() => abort.abort(new DOMException("Recovery deadline exceeded", "TimeoutError")), 30_000);
     this.hub.publish({ kind: "status", status: "degraded" });
     try {
-      if (this.context.config.projects.length > 100) throw new Error("Recovery project budget exceeded");
-      for (const project of this.context.config.projects) {
+      if (projects.length > 100) throw new Error("Recovery project budget exceeded");
+      for (const project of projects) {
         await this.context.repository.getTree(project, { signal: abort.signal, maxEntries: 100_000 });
-        if (!this.isCurrent(token)) return;
+        if (!this.isRecoveryCurrent(token, epoch)) return;
       }
+      if (!this.isRecoveryCurrent(token, epoch)) return;
       this.hub.publish({ kind: "status", status: "connected" });
-      for (const project of this.context.config.projects) this.hub.publish({ kind: "project", projectId: project.id });
+      for (const project of projects) {
+        if (!this.isRecoveryCurrent(token, epoch)) return;
+        this.hub.publish({ kind: "project", projectId: project.id });
+      }
     } catch {
       // Stay degraded; another watcher error can initiate a later bounded rescan.
     } finally {
@@ -175,6 +193,10 @@ export class ProjectWatcher {
 
   private isCurrent(token: number): boolean {
     return !this.closed && this.generation === token;
+  }
+
+  private isRecoveryCurrent(token: number, epoch: number): boolean {
+    return this.isCurrent(token) && this.configEpoch === epoch;
   }
 
   private track(promise: Promise<unknown>): void {
