@@ -31,7 +31,7 @@ describe("loadConfig", () => {
       "projects:\n  - id: alpha\n    title: Alpha\n    path: ./alpha\n",
     );
 
-    expect(config.server).toEqual({ host: "127.0.0.1", port: 3000 });
+    expect(config.server).toEqual({ host: "127.0.0.1", port: 3030 });
     expect(config.limits).toEqual({
       markdownBytes: 5 * 1024 * 1024,
       assetBytes: 25 * 1024 * 1024,

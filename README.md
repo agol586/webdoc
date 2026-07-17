@@ -12,7 +12,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:3000`. For a production build, run:
+Open `http://127.0.0.1:3030`. For a production build, run:
 
 ```bash
 npm run build && npm start
@@ -25,7 +25,7 @@ WebDoc reads `webdoc.config.yaml` from the working directory. Set `WEBDOC_CONFIG
 ```yaml
 server:
   host: 127.0.0.1
-  port: 3000
+  port: 3030
 limits:
   markdownBytes: 5242880
   assetBytes: 26214400
@@ -36,7 +36,7 @@ projects:
     homepage: README.md
 ```
 
-- `server.host` and `server.port` control the exact listener used by both `npm run dev` and `npm start`. Defaults are `127.0.0.1:3000`; binding `0.0.0.0` requires an explicit YAML value.
+- `server.host` and `server.port` control the exact listener used by both `npm run dev` and `npm start`. Defaults are `127.0.0.1:3030`; binding `0.0.0.0` requires an explicit YAML value.
 - `limits.markdownBytes` defaults to 5 MiB and limits Markdown reads.
 - `limits.assetBytes` defaults to 25 MiB and limits images and downloadable attachments.
 - Every `projects` entry needs a URL-safe lowercase `id`, display `title`, and directory `path`. Paths are resolved relative to the config file.

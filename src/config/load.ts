@@ -33,7 +33,7 @@ export async function loadConfig(configPath: string): Promise<WebDocConfig> {
   return {
     server: {
       host: parsed.server?.host ?? "127.0.0.1",
-      port: parsed.server?.port ?? 3000,
+      port: parsed.server?.port ?? 3030,
     },
     limits: {
       markdownBytes: parsed.limits?.markdownBytes ?? 5 * 1024 * 1024,
