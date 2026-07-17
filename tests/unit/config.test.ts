@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -91,5 +91,15 @@ describe("loadConfig", () => {
         "projects:\n  - id: alpha\n    title: Alpha\n    path: ./alpha\n    homepage: ''\n",
       ),
     ).rejects.toThrow(/homepage/i);
+  });
+});
+
+describe("server scripts", () => {
+  it.each(["dev", "start"])("binds the %s server to loopback by default", async (script) => {
+    const packageJson = JSON.parse(await readFile(join(process.cwd(), "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+
+    expect(packageJson.scripts[script]).toMatch(/--hostname\s+127\.0\.0\.1(?:\s|$)/);
   });
 });
