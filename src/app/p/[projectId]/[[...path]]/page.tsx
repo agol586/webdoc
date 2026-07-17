@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { AppShell } from "../../../../components/app-shell";
 import { DocumentView, ImageView } from "../../../../components/document-view";
+import { ProjectUnavailable } from "../../../../components/project-unavailable";
 import { renderMarkdown } from "../../../../markdown/render";
 import { isMissingDocumentError } from "../../../../lib/page-errors";
 import { selectActivePath } from "../../../../lib/page-selection";
@@ -49,7 +50,8 @@ export default async function ProjectPage({ params }: PageProps) {
   const { projectId, path: segments = [] } = await params;
   const { config, repository } = await getServerContext();
   const project = config.projects.find(({ id }) => id === projectId);
-  if (!project || !(await repository.isAvailable(project))) notFound();
+  if (!project) notFound();
+  if (!(await repository.isAvailable(project))) return <ProjectUnavailable title={project.title} />;
 
   const tree = await repository.getTree(project);
   const projects = await Promise.all(config.projects.map(async ({ id, title, ...candidate }) => ({

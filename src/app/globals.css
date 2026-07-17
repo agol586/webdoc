@@ -17,6 +17,9 @@ a { color: #2457a7; }
 .document-tree a[aria-current="page"] { color: #153f82; background: #d9e6fb; font-weight: 700; }
 .content-pane { min-width: 0; padding: clamp(1.25rem, 4vw, 3.5rem); }
 .content-pane article, .empty-state { width: min(100%, 58rem); margin: 0 auto; }
+.standalone-state { width: min(calc(100% - 2rem), 42rem); margin: 12vh auto; padding: 2rem; border: 1px solid #d3d9e2; border-radius: .6rem; background: #fff; box-shadow: 0 .4rem 1.5rem #10182814; }
+.standalone-state button { padding: .5rem .8rem; border: 1px solid #9aa7ba; border-radius: .35rem; background: #fff; color: #18212f; cursor: pointer; }
+.live-refresh-status { margin: 0; padding: .5rem 1rem; color: #7c2d12; background: #ffedd5; text-align: center; }
 .document-body { line-height: 1.7; overflow-wrap: anywhere; }
 .document-body img, .document-body svg { max-width: 100%; height: auto; }
 .document-body pre, .document-body .table-container { overflow-x: auto; }

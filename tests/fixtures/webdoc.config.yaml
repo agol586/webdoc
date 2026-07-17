@@ -1,0 +1,19 @@
+server:
+  host: 127.0.0.1
+  port: 3210
+limits:
+  markdownBytes: 1024
+  assetBytes: 26214400
+projects:
+  - id: project-alpha
+    title: Alpha
+    path: ./project-alpha
+    homepage: README.md
+  - id: project-beta
+    title: Beta
+    path: ./project-beta
+    homepage: index.md
+  - id: unavailable
+    title: Unavailable
+    path: ./project-unavailable
+    homepage: index.md

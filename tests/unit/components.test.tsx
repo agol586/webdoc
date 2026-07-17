@@ -9,6 +9,7 @@ import { AppShell } from "../../src/components/app-shell";
 import { ImageView } from "../../src/components/document-view";
 import { MermaidBlocks } from "../../src/components/mermaid-blocks";
 import { ProjectSwitcher } from "../../src/components/project-switcher";
+import { ProjectUnavailable } from "../../src/components/project-unavailable";
 
 const mockPush = vi.fn();
 const mockMermaidRender = vi.fn();
@@ -98,4 +99,11 @@ it("shows Mermaid source when rendering fails", async () => {
   render(<MermaidBlocks html={'<pre class="mermaid" data-mermaid-source="broken"></pre>'} path="README.md" />);
   expect(await screen.findByText(/diagram could not be rendered/i)).toBeVisible();
   expect(screen.getByText("broken")).toBeVisible();
+});
+
+it("shows an unavailable project without exposing its filesystem path", () => {
+  render(<ProjectUnavailable title="Unavailable" />);
+  expect(screen.getByRole("heading", { name: "Unavailable is unavailable" })).toBeVisible();
+  expect(screen.getByText(/directory exists and is readable/i)).toBeVisible();
+  expect(document.body).not.toHaveTextContent("/private/");
 });

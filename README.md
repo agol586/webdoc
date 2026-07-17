@@ -1,0 +1,59 @@
+# WebDoc
+
+WebDoc serves multiple local Markdown projects through a responsive web reader with navigation, syntax highlighting, Mermaid diagrams, and live refresh.
+
+## Setup
+
+Requires a current Node.js release supported by Next.js and npm.
+
+```bash
+cp webdoc.config.example.yaml webdoc.config.yaml
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:3000`. For a production build, run:
+
+```bash
+npm run build && npm start
+```
+
+## Configuration
+
+WebDoc reads `webdoc.config.yaml` from the working directory. Set `WEBDOC_CONFIG` to an absolute or working-directory-relative path to use another file.
+
+```yaml
+server:
+  host: 127.0.0.1
+  port: 3000
+limits:
+  markdownBytes: 5242880
+  assetBytes: 26214400
+projects:
+  - id: product-docs
+    title: Product Documentation
+    path: ./docs
+    homepage: README.md
+```
+
+- `server.host` and `server.port` describe the intended listener; the supplied npm scripts bind to localhost by default.
+- `limits.markdownBytes` defaults to 5 MiB and limits Markdown reads.
+- `limits.assetBytes` defaults to 25 MiB and limits images and downloadable attachments.
+- Every `projects` entry needs a URL-safe lowercase `id`, display `title`, and directory `path`. Paths are resolved relative to the config file.
+- `homepage` is optional and must name Markdown inside the project. An explicit homepage wins; otherwise WebDoc tries root `README.md`, then root `index.md`, then the first Markdown document for navigation fallbacks.
+
+Markdown (`.md`) is rendered with GitHub-flavored tables and task lists, syntax-highlighted fenced code, and Mermaid fenced diagrams. Common AVIF, GIF, JPEG, PNG, SVG, and WebP images are previewed; other regular files are exposed as bounded attachments.
+
+## Security and network exposure
+
+WebDoc confines resolved document paths to configured project roots, rejects traversal and unsafe link schemes, removes raw HTML from Markdown, applies a restrictive Content Security Policy, and sends anti-sniffing, no-referrer, and frame-denial headers. Errors shown to browsers are generic and do not include filesystem paths or stack traces.
+
+The default localhost binding is deliberate. Binding to `0.0.0.0`, a LAN address, or another internal-network interface exposes the configured files to anyone who can reach that listener; WebDoc does not provide authentication or TLS. For shared or production access, keep WebDoc on a private listener and put an authenticated TLS reverse proxy in front of it. Restrict the proxy and host firewall to intended users.
+
+## Troubleshooting
+
+- **Project unavailable:** confirm its configured directory exists, is a directory, and the WebDoc process can read it. Relative paths are relative to the YAML file, not necessarily the shell directory.
+- **Startup says a directory is missing or unreadable:** correct permissions or the path, then restart. WebDoc resolves project roots while loading configuration.
+- **Live refresh disconnected or degraded:** documents still render and manual reload remains available. Check file-watcher limits, permissions, network/proxy buffering of `/api/events`, and whether the project directory is on a filesystem that supports change notifications; then restart after correcting the cause.
+- **File too large:** raise the corresponding byte limit only after considering memory use and the trust level of the exposed project.
+- **Wrong landing document:** verify the explicit `homepage`; if omitted, check the root `README.md` and `index.md` precedence above.
