@@ -50,3 +50,9 @@ All passed. Build emits an existing Turbopack NFT tracing warning related to dyn
 - `npm run typecheck`: passed.
 - `npm test`: 7 files and 97 tests passed.
 - `npm run build`: passed with the same non-fatal Turbopack NFT tracing warning noted above.
+
+## Image active-path follow-up RED/GREEN
+
+- **RED:** added `page-selection.test.ts` to require image paths to take precedence over Markdown paths and empty projects to yield no active path. The focused test failed because the selection helper did not exist, matching the page's direct use of the emptied `documentPath` after selecting an image.
+- **GREEN:** added `selectActivePath(imagePath, documentPath)` and wired the reader page to pass its result into `AppShell`. Deep-linked images now retain `aria-current` and expand their parent directories.
+- **Verification:** `npm test -- tests/unit/page-selection.test.ts tests/unit/components.test.tsx` passed 8/8 tests; `npm run typecheck` passed.

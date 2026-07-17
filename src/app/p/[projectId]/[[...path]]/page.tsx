@@ -4,6 +4,7 @@ import { AppShell } from "../../../../components/app-shell";
 import { DocumentView, ImageView } from "../../../../components/document-view";
 import { renderMarkdown } from "../../../../markdown/render";
 import { isMissingDocumentError } from "../../../../lib/page-errors";
+import { selectActivePath } from "../../../../lib/page-selection";
 import type { TreeNode } from "../../../../repository/types";
 import { getServerContext } from "../../../../server/context";
 
@@ -90,7 +91,7 @@ export default async function ProjectPage({ params }: PageProps) {
   }
 
   return (
-    <AppShell projects={projects} activeId={projectId} nodes={tree} activePath={documentPath || undefined}>
+    <AppShell projects={projects} activeId={projectId} nodes={tree} activePath={selectActivePath(imagePath, documentPath)}>
       {imagePath ? <ImageView projectId={projectId} path={imagePath} /> : content ? <DocumentView {...content} path={documentPath} /> : (
         <section className="empty-state"><h1>{project.title}</h1><p>This project has no Markdown documents.</p></section>
       )}
