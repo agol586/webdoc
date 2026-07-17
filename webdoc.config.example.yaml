@@ -1,0 +1,11 @@
+server:
+  host: 127.0.0.1
+  port: 3000
+limits:
+  markdownBytes: 5242880
+  assetBytes: 26214400
+projects:
+  - id: example
+    title: Example Project
+    path: ./docs
+    homepage: README.md
