@@ -1,10 +1,11 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
+import { appendFileSync } from "node:fs";
+import { appendFile, mkdir, mkdtemp, open, symlink, writeFile, type FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ProjectConfig } from "../../src/config/load";
 import { DocumentRepository, FileTooLargeError } from "../../src/repository/repository";
@@ -116,9 +117,17 @@ describe("DocumentRepository", () => {
     await expect(repository.stream(project, "folder", 8)).rejects.toMatchObject({ code: "EACCES" });
   });
 
-  it("rejects a FIFO before attempting a blocking read", async () => {
+  it.skipIf(process.platform === "win32")("rejects a FIFO before attempting a blocking read", async ({ skip }) => {
     const fifo = join(root, "pipe.md");
-    await execFileAsync("mkfifo", [fifo]);
+    try {
+      await execFileAsync("mkfifo", [fifo]);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        skip();
+        return;
+      }
+      throw error;
+    }
     let releaseWriter: ReturnType<typeof setTimeout> | undefined;
     const writer = new Promise<void>((resolve) => {
       releaseWriter = setTimeout(() => {
@@ -144,5 +153,55 @@ describe("DocumentRepository", () => {
     await writeFile(join(root, "target.md"), "target");
     await symlink(join(root, "target.md"), join(root, "alias.md"));
     expect(await repository.read(project, "alias.md", 8)).toEqual(Buffer.from("target"));
+  });
+
+  it("bounds a buffered read when the file grows after handle stat", async () => {
+    const file = join(root, "growing.md");
+    await writeFile(file, "1234");
+    const probe = await open(file, "r");
+    const prototype = Object.getPrototypeOf(probe) as { stat: typeof probe.stat };
+    await probe.close();
+    const originalStat = prototype.stat;
+    const statSpy = vi.spyOn(prototype, "stat").mockImplementationOnce(async function (this: FileHandle) {
+      const snapshot = await originalStat.call(this);
+      await appendFile(file, "56789");
+      return snapshot;
+    });
+    try {
+      await expect(repository.read(project, "growing.md", 8)).rejects.toThrow(FileTooLargeError);
+    } finally {
+      statSpy.mockRestore();
+    }
+  });
+
+  it("streams only the fstat snapshot when an asset grows before streaming", async () => {
+    const file = join(root, "growing.bin");
+    await writeFile(file, "1234");
+    const probe = await open(file, "r");
+    const prototype = Object.getPrototypeOf(probe) as { createReadStream: typeof probe.createReadStream };
+    await probe.close();
+    const originalCreateReadStream = prototype.createReadStream;
+    const streamSpy = vi.spyOn(prototype, "createReadStream").mockImplementationOnce(function (
+      this: FileHandle,
+      options,
+    ) {
+      appendFileSync(file, "56789");
+      return originalCreateReadStream.call(this, options);
+    });
+    try {
+      const asset = await repository.stream(project, "growing.bin", 8);
+      expect(asset.size).toBe(4);
+      expect(Buffer.from(await new Response(asset.body).arrayBuffer()).toString()).toBe("1234");
+    } finally {
+      streamSpy.mockRestore();
+    }
+  });
+
+  it("returns and closes an empty asset stream", async () => {
+    await writeFile(join(root, "empty.bin"), "");
+    const asset = await repository.stream(project, "empty.bin", 8);
+    expect(asset.size).toBe(0);
+    expect((await new Response(asset.body).arrayBuffer()).byteLength).toBe(0);
+    expect(() => asset.close()).not.toThrow();
   });
 });

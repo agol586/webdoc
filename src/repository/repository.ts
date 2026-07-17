@@ -34,6 +34,25 @@ const safeOpenFlags =
   constants.O_RDONLY |
   (constants.O_NOFOLLOW ?? 0) |
   (constants.O_NONBLOCK ?? 0);
+const READ_CHUNK_BYTES = 64 * 1024;
+
+async function readBounded(
+  handle: Awaited<ReturnType<typeof open>>,
+  path: string,
+  limit: number,
+): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  while (total <= limit) {
+    const buffer = Buffer.allocUnsafe(Math.min(READ_CHUNK_BYTES, limit + 1 - total));
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, null);
+    if (bytesRead === 0) return Buffer.concat(chunks, total);
+    chunks.push(buffer.subarray(0, bytesRead));
+    total += bytesRead;
+    if (total > limit) throw new FileTooLargeError(path, total, limit);
+  }
+  throw new FileTooLargeError(path, total, limit);
+}
 
 function joinRelative(parent: string, name: string): string {
   return parent ? `${parent}/${name}` : name;
@@ -133,7 +152,7 @@ export class DocumentRepository {
       const metadata = await handle.stat();
       if (!metadata.isFile()) throw notRegularFile();
       if (metadata.size > limit) throw new FileTooLargeError(path, metadata.size, limit);
-      return await handle.readFile();
+      return await readBounded(handle, path, limit);
     } finally {
       await handle.close();
     }
@@ -156,7 +175,17 @@ export class DocumentRepository {
       const metadata = await handle.stat();
       if (!metadata.isFile()) throw notRegularFile();
       if (metadata.size > limit) throw new FileTooLargeError(path, metadata.size, limit);
-      const stream = handle.createReadStream({ autoClose: true });
+      if (metadata.size === 0) {
+        await handle.close();
+        const empty = Readable.from([]);
+        return {
+          body: Readable.toWeb(empty) as ReadableStream<Uint8Array>,
+          size: 0,
+          mtimeMs: metadata.mtimeMs,
+          close: () => empty.destroy(),
+        };
+      }
+      const stream = handle.createReadStream({ autoClose: true, end: metadata.size - 1 });
       return {
         body: Readable.toWeb(stream) as ReadableStream<Uint8Array>,
         size: metadata.size,
