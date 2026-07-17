@@ -144,6 +144,21 @@ it("rewrites repeated single-branch par blocks from real sequence docs", async (
   );
 });
 
+it("rewrites sequence participant aliases that collide with Mermaid keywords", async () => {
+  render(
+    <MermaidBlocks
+      html={'<pre class="mermaid" data-mermaid-source="sequenceDiagram\n  participant Loop as Polling loop\n  participant Bot\n  Loop-&gt;&gt;Bot: run()\n  loop poll\n    Bot-&gt;&gt;Bot: work\n  end\n  Bot--&gt;&gt;Loop: done\n  Loop-&gt;&gt;Bot: next"></pre>'}
+      path="README.md"
+    />,
+  );
+
+  await vi.waitFor(() => expect(mockMermaidRender).toHaveBeenCalled());
+  expect(mockMermaidRender).toHaveBeenCalledWith(
+    expect.stringMatching(/^mermaid-.*-0$/),
+    "sequenceDiagram\n  participant Loop_participant as Polling loop\n  participant Bot\n  Loop_participant->>Bot: run()\n  loop poll\n    Bot->>Bot: work\n  end\n  Bot-->>Loop_participant: done\n  Loop_participant->>Bot: next",
+  );
+});
+
 it("shows an unavailable project without exposing its filesystem path", () => {
   render(<ProjectUnavailable title="Unavailable" />);
   expect(screen.getByRole("heading", { name: "Unavailable is unavailable" })).toBeVisible();

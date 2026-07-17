@@ -27,7 +27,39 @@ function normalizeMermaidSource(source: string): string {
     .map((line) => (line.trim().length === 0 ? "" : line.slice(indent)))
     ).join("\n");
 
-  return normalizeSequenceDiagramParBlocks(dedented);
+  return normalizeSequenceDiagramParticipantAliases(
+    normalizeSequenceDiagramParBlocks(dedented),
+  );
+}
+
+function normalizeSequenceDiagramParticipantAliases(source: string): string {
+  const lines = source.split("\n");
+  const first = lines.find((line) => line.trim().length > 0)?.trimStart() ?? "";
+  if (!first.startsWith("sequenceDiagram")) return source;
+
+  const aliases = new Map<string, string>();
+  for (const line of lines) {
+    const declaration = line.match(/^(\s*(?:participant|actor)\s+)(\S+)(\s+as\s+.*)?$/);
+    if (declaration?.[2].toLowerCase() === "loop") {
+      aliases.set(declaration[2], `${declaration[2]}_participant`);
+    }
+  }
+
+  return lines.map((line) => {
+    const declaration = line.match(/^(\s*(?:participant|actor)\s+)(\S+)(\s+as\s+.*)?$/);
+    if (declaration && aliases.has(declaration[2])) {
+      return `${declaration[1]}${aliases.get(declaration[2])}${declaration[3] ?? ""}`;
+    }
+
+    let normalized = line;
+    for (const [alias, replacement] of aliases) {
+      const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      normalized = normalized
+        .replace(new RegExp(`^(\\s*)${escaped}(?=\\s*[=-]+(?:>>?|x|\\)))`), `$1${replacement}`)
+        .replace(new RegExp(`([=-]+(?:>>?|x|\\))\\s*)${escaped}(?=\\s*:)`), `$1${replacement}`);
+    }
+    return normalized;
+  }).join("\n");
 }
 
 function normalizeSequenceDiagramParBlocks(source: string): string {
