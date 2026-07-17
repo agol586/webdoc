@@ -90,9 +90,7 @@ export class DocumentRepository {
       try {
         await this.validateHomepage(project, candidate);
         return candidate;
-      } catch (error) {
-        if (error instanceof InvalidHomepageError) throw error;
-      }
+      } catch {}
     }
     return null;
   }

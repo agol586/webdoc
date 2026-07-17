@@ -79,6 +79,13 @@ describe("DocumentRepository", () => {
     expect(await repository.chooseHomepage(project)).toBeNull();
   });
 
+  it("skips an invalid automatic homepage candidate", async () => {
+    await mkdir(join(root, "README.md"));
+    await writeFile(join(root, "index.md"), "home");
+
+    expect(await repository.chooseHomepage(project)).toBe("index.md");
+  });
+
   it.each(["../outside.md", "/etc/passwd"])("rejects unsafe configured homepage %s", async (homepage) => {
     await expect(repository.chooseHomepage({ ...project, homepage })).rejects.toThrow(/path|absolute|outside/i);
   });
