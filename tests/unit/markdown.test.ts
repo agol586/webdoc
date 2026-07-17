@@ -28,10 +28,11 @@ describe("renderMarkdown", () => {
     );
   });
 
-  it("routes linked files with extensions to bounded asset downloads", async () => {
-    const { html } = await renderMarkdown({ projectId: "alpha", documentPath: "guide/a.md", source: "[PDF](../manual.pdf) [dir](../reference)" });
-    expect(html).toContain('href="/api/assets/alpha/manual.pdf"');
-    expect(html).toContain('href="/p/alpha/reference"');
+  it("routes all ordinary relative links through pages until the tree identifies their kind", async () => {
+    const { html } = await renderMarkdown({ projectId: "alpha", documentPath: "guide/a.md", source: "[PDF](../manual.pdf) [license](../LICENSE) [version](../v1.0)" });
+    expect(html).toContain('href="/p/alpha/manual.pdf"');
+    expect(html).toContain('href="/p/alpha/LICENSE"');
+    expect(html).toContain('href="/p/alpha/v1.0"');
   });
 
   it.each([

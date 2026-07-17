@@ -165,6 +165,7 @@ export class ProjectWatcher {
         this.hub.publish({ kind: "project", projectId: project.id });
       }
     } catch (error) {
+      if (!this.isRecoveryCurrent(token, epoch)) return;
       console.error("WebDoc watcher recovery failed", { category: error instanceof Error ? error.name : "UnknownError", message: error instanceof Error ? error.message : String(error) });
       // Stay degraded; another watcher error can initiate a later bounded rescan.
     } finally {

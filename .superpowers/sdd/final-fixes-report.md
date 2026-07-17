@@ -30,3 +30,11 @@ Initial focused RED run: 7 failures (4 config homepage, 2 tree homepage, 1 PDF r
 
 - The two moderate dependency audit findings remain and require a breaking `npm audit fix --force`; no forced upgrade was applied.
 - Turbopack reports broad output-file tracing. README now calls out preserving traced artifacts for release packaging; resolving the trace itself is outside this finding set.
+
+## Follow-up final review
+
+- Removed extension-based attachment guessing from Markdown AST rewriting. All ordinary relative anchors, including `manual.pdf`, `LICENSE`, and dotted `v1.0`, now route through `/p`; image nodes remain `/api/assets`.
+- Added tree-node-driven page destinations: real attachment nodes redirect to the bounded asset endpoint, directories (including dotted names) resolve their Markdown homepage, Markdown renders, and images retain preview behavior.
+- Recovery catches now suppress diagnostics only after this watcher instance is closed or its config epoch changes. Current deadline, budget, and repository errors remain diagnostic.
+- RED: focused tests initially had 5 expected failures (three routing behaviors grouped in renderer coverage, two node helpers, and active-abort logging assertions).
+- GREEN verification: focused 43 passed; full `npm test` 136 passed; typecheck/lint/build passed; E2E 13 passed and 1 skipped. The existing Turbopack tracing warning remains unchanged.

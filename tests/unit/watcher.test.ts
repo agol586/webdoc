@@ -147,6 +147,7 @@ describe("ProjectWatcher", () => {
 
   it("stops recovery before scanning when the project budget is exceeded", async () => {
     const diagnostic = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    diagnostic.mockClear();
     const hub = { publish: vi.fn() } as unknown as ChangeHub;
     const repository = new DocumentRepository();
     vi.spyOn(repository, "getTree").mockResolvedValue([]);
@@ -161,6 +162,8 @@ describe("ProjectWatcher", () => {
   });
 
   it("close aborts and awaits recovery without publishing afterward", async () => {
+    const diagnostic = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    diagnostic.mockClear();
     const hub = { publish: vi.fn() } as unknown as ChangeHub;
     const repository = new DocumentRepository();
     vi.spyOn(repository, "getTree").mockImplementation(async (_project, options) => {
@@ -175,6 +178,7 @@ describe("ProjectWatcher", () => {
     (hub.publish as ReturnType<typeof vi.fn>).mockClear();
     await watcher.close();
     expect(hub.publish).not.toHaveBeenCalled();
+    expect(diagnostic).not.toHaveBeenCalledWith("WebDoc watcher recovery failed", expect.anything());
   });
 
   it("serializes overlapping reloads so the latest disk generation wins", async () => {
@@ -261,5 +265,6 @@ describe("ProjectWatcher", () => {
     await vi.waitFor(() => expect(hub.publish).toHaveBeenCalledWith({ kind: "status", status: "degraded" }));
     expect(hub.publish).not.toHaveBeenCalledWith({ kind: "status", status: "connected" });
     expect(diagnostic).toHaveBeenCalledWith("WebDoc config reload rejected", expect.objectContaining({ category: "Error", message: "invalid" }));
+    expect(diagnostic).not.toHaveBeenCalledWith("WebDoc watcher recovery failed", expect.anything());
   });
 });

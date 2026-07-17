@@ -5,7 +5,7 @@ import { DocumentView, ImageView } from "../../../../components/document-view";
 import { ProjectUnavailable } from "../../../../components/project-unavailable";
 import { renderMarkdown } from "../../../../markdown/render";
 import { isMissingDocumentError } from "../../../../lib/page-errors";
-import { selectActivePath } from "../../../../lib/page-selection";
+import { nodeDestination, selectActivePath } from "../../../../lib/page-selection";
 import type { TreeNode } from "../../../../repository/types";
 import { getServerContext } from "../../../../server/context";
 
@@ -38,14 +38,6 @@ function firstMarkdown(nodes: TreeNode[]): string | null {
   return null;
 }
 
-function directoryHomepage(node: Extract<TreeNode, { kind: "directory" }>): string | null {
-  for (const candidate of ["readme.md", "index.md"]) {
-    const match = node.children.find((child) => child.kind === "markdown" && child.name.toLowerCase() === candidate);
-    if (match) return match.path;
-  }
-  return firstMarkdown(node.children);
-}
-
 export default async function ProjectPage({ params }: PageProps) {
   const { projectId, path: segments = [] } = await params;
   const { config, repository } = await getServerContext();
@@ -68,15 +60,13 @@ export default async function ProjectPage({ params }: PageProps) {
   } else {
     const node = findNode(tree, documentPath);
     if (!node) notFound();
+    const destination = nodeDestination(projectId, node);
+    if (destination.kind === "redirect") redirect(destination.href);
     if (node.kind === "directory") {
-      const homepage = directoryHomepage(node);
-      if (homepage) redirect(route(projectId, homepage));
       documentPath = "";
     } else if (node.kind === "image") {
       imagePath = documentPath;
       documentPath = "";
-    } else if (node.kind !== "markdown") {
-      notFound();
     }
   }
 

@@ -124,10 +124,8 @@ export function rewriteRelativeUrls(options: RewriteRelativeUrlsOptions) {
       if (node.url.startsWith("#")) return;
       const rewritten = normalizeContainedPath(options.documentPath, node.url);
       const projectId = encodeURIComponent(options.projectId);
-      const pathname = splitSuffix(rewritten).pathname;
-      const attachment = node.type === "link" && posix.extname(pathname).toLowerCase() !== ".md" && posix.extname(pathname) !== "";
       node.url =
-        node.type === "image" || attachment
+        node.type === "image"
           ? `/api/assets/${projectId}/${rewritten}`
           : `/p/${projectId}/${rewritten}`;
     });
