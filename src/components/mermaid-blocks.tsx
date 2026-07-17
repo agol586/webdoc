@@ -23,11 +23,43 @@ function normalizeMermaidSource(source: string): string {
       return minIndent === undefined ? match : Math.min(minIndent, match);
     }, undefined as number | undefined);
 
-  if (!indent) return lines.join("\n");
-
-  return lines
+  const dedented = (!indent ? lines : lines
     .map((line) => (line.trim().length === 0 ? "" : line.slice(indent)))
-    .join("\n");
+    ).join("\n");
+
+  return normalizeSequenceDiagramParBlocks(dedented);
+}
+
+function normalizeSequenceDiagramParBlocks(source: string): string {
+  const lines = source.split("\n");
+  const first = lines.find((line) => line.trim().length > 0)?.trimStart() ?? "";
+  if (!first.startsWith("sequenceDiagram")) return source;
+
+  const output: string[] = [];
+  const stack: Array<{ startIndex: number; hasAnd: boolean }> = [];
+
+  for (const line of lines) {
+    const trimmed = line.trimStart();
+    if (/^par(?:\s|$)/.test(trimmed)) {
+      stack.push({ startIndex: output.length, hasAnd: false });
+      output.push(line);
+      continue;
+    }
+    if (/^and(?:\s|$)/.test(trimmed) && stack.length > 0) {
+      stack[stack.length - 1].hasAnd = true;
+      output.push(line);
+      continue;
+    }
+    if (/^end(?:\s|$)/.test(trimmed) && stack.length > 0) {
+      const block = stack.pop()!;
+      if (block.hasAnd) output.push(line);
+      else output[block.startIndex] = "";
+      continue;
+    }
+    output.push(line);
+  }
+
+  return output.filter((line) => line.trim().length > 0).join("\n");
 }
 
 export function MermaidBlocks({ html, path }: { html: string; path: string }) {

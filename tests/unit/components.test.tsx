@@ -114,6 +114,36 @@ it("normalizes Mermaid source before rendering", async () => {
   expect(mockMermaidRender).toHaveBeenCalledWith(expect.stringMatching(/^mermaid-.*-0$/), "flowchart LR\n  A --> B");
 });
 
+it("rewrites single-branch sequence par blocks for Mermaid compatibility", async () => {
+  render(
+    <MermaidBlocks
+      html={'<pre class="mermaid" data-mermaid-source="sequenceDiagram\n  A->>B: before\n  par parallel-only\n    A->>B: inside\n  end\n  B-->>A: after"></pre>'}
+      path="README.md"
+    />,
+  );
+
+  await vi.waitFor(() => expect(mockMermaidRender).toHaveBeenCalled());
+  expect(mockMermaidRender).toHaveBeenCalledWith(
+    expect.stringMatching(/^mermaid-.*-0$/),
+    "sequenceDiagram\n  A->>B: before\n    A->>B: inside\n  B-->>A: after",
+  );
+});
+
+it("rewrites repeated single-branch par blocks from real sequence docs", async () => {
+  render(
+    <MermaidBlocks
+      html={'<pre class="mermaid" data-mermaid-source="sequenceDiagram\n  Loop->>Bot: run()\n  par 对候选并行估算\n    Bot->>Lens: estimateLiquidation(proxy, isDirectRedemption)\n  end\n  Lens-->>Bot: amounts 或 error\n  par 并行等待已发送交易\n    Bot->>RPC: waitForTransactionReceipt(hash, timeout)\n  end\n  RPC-->>Bot: success / reverted / rejected"></pre>'}
+      path="README.md"
+    />,
+  );
+
+  await vi.waitFor(() => expect(mockMermaidRender).toHaveBeenCalled());
+  expect(mockMermaidRender).toHaveBeenCalledWith(
+    expect.stringMatching(/^mermaid-.*-0$/),
+    "sequenceDiagram\n  Loop->>Bot: run()\n    Bot->>Lens: estimateLiquidation(proxy, isDirectRedemption)\n  Lens-->>Bot: amounts 或 error\n    Bot->>RPC: waitForTransactionReceipt(hash, timeout)\n  RPC-->>Bot: success / reverted / rejected",
+  );
+});
+
 it("shows an unavailable project without exposing its filesystem path", () => {
   render(<ProjectUnavailable title="Unavailable" />);
   expect(screen.getByRole("heading", { name: "Unavailable is unavailable" })).toBeVisible();
