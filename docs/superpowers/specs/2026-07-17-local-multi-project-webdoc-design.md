@@ -43,7 +43,7 @@ The application reads a YAML file with this shape:
 ```yaml
 server:
   host: 127.0.0.1
-  port: 3000
+  port: 3030
 
 projects:
   - id: aave-bots-v4
@@ -52,7 +52,7 @@ projects:
     homepage: README.md
 ```
 
-Project IDs must be unique and URL-safe. Each project path is resolved to an absolute canonical path. `homepage` is optional and must resolve to a Markdown file inside the project root.
+The default listener is `127.0.0.1:3030`. Project IDs must be unique and URL-safe. Each project path is resolved to an absolute canonical path. `homepage` is optional and must resolve to a Markdown file inside the project root.
 
 Invalid top-level configuration prevents startup and reports the exact invalid field. A project directory that becomes unavailable after startup is marked unavailable without taking other projects offline.
 
