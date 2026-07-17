@@ -19,6 +19,7 @@ type AstNode = {
   type?: string;
   depth?: number;
   value?: string;
+  alt?: string;
   tagName?: string;
   properties?: Record<string, unknown>;
   children?: AstNode[];
@@ -26,6 +27,7 @@ type AstNode = {
 
 function textContent(node: AstNode): string {
   if (node.type === "text" || node.type === "inlineCode") return node.value ?? "";
+  if (node.type === "image") return node.alt ?? "";
   return (node.children ?? []).map(textContent).join("");
 }
 
@@ -38,6 +40,10 @@ function captureFirstHeading() {
   };
 }
 
+function isMermaidLanguage(language: unknown): boolean {
+  return typeof language === "string" && language.toLowerCase() === "mermaid";
+}
+
 function markMermaidBlocks() {
   return (tree: AstNode): void => {
     const walk = (node: AstNode): void => {
@@ -46,7 +52,12 @@ function markMermaidBlocks() {
       if (
         code?.tagName === "code" &&
         Array.isArray(classes) &&
-        classes.includes("language-mermaid")
+        classes.some(
+          (className) =>
+            typeof className === "string" &&
+            className.startsWith("language-") &&
+            isMermaidLanguage(className.slice("language-".length)),
+        )
       ) {
         const source = textContent(code).replace(/\n$/, "");
         node.properties = { className: ["mermaid"], dataMermaidSource: source };
@@ -62,7 +73,7 @@ function markMermaidBlocks() {
 function hasHighlightableCode(tree: AstNode): boolean {
   if (tree.type === "code") {
     const language = (tree as AstNode & { lang?: string }).lang;
-    return language !== "mermaid";
+    return !isMermaidLanguage(language);
   }
   return (tree.children ?? []).some(hasHighlightableCode);
 }

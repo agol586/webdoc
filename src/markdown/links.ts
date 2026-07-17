@@ -14,8 +14,23 @@ export interface RewriteRelativeUrlsOptions {
   documentPath: string;
 }
 
-function isExternal(url: string): boolean {
-  return /^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(url);
+function decodedForSchemeCheck(url: string): string {
+  let decoded = url;
+  for (let pass = 0; pass < 3; pass += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    } catch {
+      break;
+    }
+  }
+  return decoded.replace(/[\u0000-\u0020\u007f]+/g, "");
+}
+
+function externalScheme(url: string): string | undefined {
+  if (url.startsWith("//")) return "https";
+  return /^([a-z][a-z\d+.-]*):/i.exec(decodedForSchemeCheck(url))?.[1].toLowerCase();
 }
 
 function splitSuffix(url: string): { pathname: string; suffix: string } {
@@ -27,15 +42,21 @@ function splitSuffix(url: string): { pathname: string; suffix: string } {
 
 function normalizeContainedPath(documentPath: string, url: string): string {
   const { pathname, suffix } = splitSuffix(url);
-  let decodedPath: string;
-  try {
-    decodedPath = decodeURIComponent(pathname).replaceAll("\\", "/");
-  } catch {
-    throw new Error(`Invalid encoded relative URL: ${url}`);
+  let decodedPath = pathname;
+  for (let pass = 0; /%[\da-f]{2}/i.test(decodedPath); pass += 1) {
+    if (pass === 8) throw new Error(`Excessively encoded relative URL: ${url}`);
+    try {
+      decodedPath = decodeURIComponent(decodedPath);
+    } catch {
+      throw new Error(`Invalid encoded relative URL: ${url}`);
+    }
   }
+  decodedPath = decodedPath.replaceAll("\\", "/");
 
   const base = posix.dirname(documentPath.replaceAll("\\", "/"));
-  const normalized = posix.normalize(posix.join(base, decodedPath));
+  const normalized = posix.normalize(
+    decodedPath === "" ? documentPath.replaceAll("\\", "/") : posix.join(base, decodedPath),
+  );
   if (
     posix.isAbsolute(decodedPath) ||
     normalized === ".." ||
@@ -44,7 +65,8 @@ function normalizeContainedPath(documentPath: string, url: string): string {
     throw new Error(`Relative URL escapes the project document root: ${url}`);
   }
 
-  return normalized + suffix;
+  const encoded = normalized.split("/").map(encodeURIComponent).join("/");
+  return encoded + suffix;
 }
 
 function walk(node: MarkdownNode, visit: (node: MarkdownNode) => void): void {
@@ -57,7 +79,11 @@ export function rewriteRelativeUrls(options: RewriteRelativeUrlsOptions) {
     walk(tree, (node) => {
       if ((node.type !== "link" && node.type !== "image") || !node.url) return;
 
-      if (isExternal(node.url)) {
+      const scheme = externalScheme(node.url);
+      if (scheme) {
+        const allowed =
+          scheme === "http" || scheme === "https" || (node.type === "link" && scheme === "mailto");
+        if (!allowed) throw new Error(`Unsafe URL scheme rejected: ${scheme}`);
         if (node.type === "link") {
           node.data ??= {};
           node.data.hProperties = {
