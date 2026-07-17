@@ -198,7 +198,9 @@ describe("document APIs", () => {
       context("alpha", ["..", "secret.md"]),
     );
     expect(response.status).toBe(400);
-    expect(await response.text()).not.toContain(fixture);
+    const body = await response.text();
+    expect(JSON.parse(body)).toEqual({ error: "Invalid path" });
+    expect(body).not.toContain(fixture);
   });
 
   it("returns 404 for a missing file", async () => {

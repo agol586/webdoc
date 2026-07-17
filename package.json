@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1",
+    "dev": "tsx scripts/webdoc-server.ts dev",
     "build": "next build",
-    "start": "next start --hostname 127.0.0.1",
+    "start": "tsx scripts/webdoc-server.ts start",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
@@ -27,6 +27,7 @@
     "remark-parse": "latest",
     "remark-rehype": "latest",
     "shiki": "latest",
+    "tsx": "^4.23.1",
     "unified": "latest",
     "yaml": "latest",
     "zod": "latest"

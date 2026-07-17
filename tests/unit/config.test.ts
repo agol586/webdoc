@@ -95,11 +95,11 @@ describe("loadConfig", () => {
 });
 
 describe("server scripts", () => {
-  it.each(["dev", "start"])("binds the %s server to loopback by default", async (script) => {
+  it.each(["dev", "start"])("delegates the %s listener to the YAML-aware launcher", async (script) => {
     const packageJson = JSON.parse(await readFile(join(process.cwd(), "package.json"), "utf8")) as {
       scripts: Record<string, string>;
     };
 
-    expect(packageJson.scripts[script]).toMatch(/--hostname\s+127\.0\.0\.1(?:\s|$)/);
+    expect(packageJson.scripts[script]).toBe(`tsx scripts/webdoc-server.ts ${script}`);
   });
 });

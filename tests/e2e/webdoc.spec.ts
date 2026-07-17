@@ -13,7 +13,12 @@ test("sends security headers on application and API responses", async ({ request
     expect(response.headers()["x-content-type-options"]).toBe("nosniff");
     expect(response.headers()["referrer-policy"]).toBe("no-referrer");
     expect(response.headers()["x-frame-options"]).toBe("DENY");
-    expect(response.headers()["content-security-policy"]).not.toContain("'unsafe-eval'");
+    const policy = response.headers()["content-security-policy"];
+    const scripts = policy.split("; ").find((directive) => directive.startsWith("script-src "));
+    expect(scripts).toMatch(/'nonce-[A-Za-z0-9+/=_-]+'/);
+    expect(scripts).toContain("'strict-dynamic'");
+    expect(scripts).not.toContain("'unsafe-inline'");
+    expect(scripts).not.toContain("'unsafe-eval'");
   }
 });
 
@@ -63,7 +68,7 @@ test("reports degraded live refresh without exposing implementation details", as
   expect(await page.getByRole("status").textContent()).not.toContain(process.cwd());
 });
 
-test("shows safe missing, unavailable, oversized, and traversal failures", async ({ page, request }) => {
+test("shows safe missing, unavailable, and oversized failures", async ({ page }) => {
   const missing = await page.goto("/p/project-alpha/missing.md");
   expect(missing?.status()).toBe(404);
   await expect(page.getByRole("heading", { name: /not found/i })).toBeVisible();
@@ -89,8 +94,14 @@ test("shows safe missing, unavailable, oversized, and traversal failures", async
     await rename(hiddenUnavailable, unavailable);
   }
 
-  const traversal = await request.get("/api/content/project-alpha/%252e%252e%252fREADME.md");
-  expect(traversal.status()).toBeGreaterThanOrEqual(400);
-  expect(traversal.status()).toBeLessThan(500);
-  expect(await traversal.text()).not.toContain(process.cwd());
+});
+
+test("HTTP normalization does not expose content for encoded dot segments", async ({ request }) => {
+  // Next/WHATWG URL normalization prevents dot segments from reaching the route. The route-level
+  // integration test passes ["..", "secret.md"] directly and asserts the path policy's exact 400.
+  const response = await request.get("/api/content/project-alpha/%252e%252e%252fREADME.md");
+  const body = await response.text();
+  expect(response.status()).toBe(404);
+  expect(JSON.parse(body)).toEqual({ error: "Not found" });
+  expect(body).not.toContain(process.cwd());
 });

@@ -36,7 +36,7 @@ projects:
     homepage: README.md
 ```
 
-- `server.host` and `server.port` describe the intended listener; the supplied npm scripts bind to localhost by default.
+- `server.host` and `server.port` control the exact listener used by both `npm run dev` and `npm start`. Defaults are `127.0.0.1:3000`; binding `0.0.0.0` requires an explicit YAML value.
 - `limits.markdownBytes` defaults to 5 MiB and limits Markdown reads.
 - `limits.assetBytes` defaults to 25 MiB and limits images and downloadable attachments.
 - Every `projects` entry needs a URL-safe lowercase `id`, display `title`, and directory `path`. Paths are resolved relative to the config file.

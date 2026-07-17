@@ -10,6 +10,7 @@ import { ImageView } from "../../src/components/document-view";
 import { MermaidBlocks } from "../../src/components/mermaid-blocks";
 import { ProjectSwitcher } from "../../src/components/project-switcher";
 import { ProjectUnavailable } from "../../src/components/project-unavailable";
+import ErrorView from "../../src/app/error";
 
 const mockPush = vi.fn();
 const mockMermaidRender = vi.fn();
@@ -106,4 +107,13 @@ it("shows an unavailable project without exposing its filesystem path", () => {
   expect(screen.getByRole("heading", { name: "Unavailable is unavailable" })).toBeVisible();
   expect(screen.getByText(/directory exists and is readable/i)).toBeVisible();
   expect(document.body).not.toHaveTextContent("/private/");
+});
+
+it("renders an error boundary fragment without nesting a document", () => {
+  const view = ErrorView({ error: new Error("private stack"), reset: () => undefined });
+  expect(view.type).toBe("main");
+  const { container } = render(<ErrorView error={new Error("private stack")} reset={() => undefined} />);
+  expect(screen.getByRole("heading", { name: "This document could not be displayed" })).toBeVisible();
+  expect(container.querySelector("html, body")).toBeNull();
+  expect(container).not.toHaveTextContent("private stack");
 });

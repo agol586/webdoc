@@ -1,15 +1,13 @@
 import { expect, it } from "vitest";
 
-import nextConfig from "../../next.config";
+import { buildContentSecurityPolicy } from "../../src/http/content-security-policy";
 
-it("applies hardened headers to every route without unsafe-eval", async () => {
-  const rules = await nextConfig.headers?.();
-  expect(rules).toHaveLength(1);
-  expect(rules?.[0].source).toBe("/:path*");
-  const headers = Object.fromEntries(rules?.[0].headers.map(({ key, value }) => [key, value]) ?? []);
-  expect(headers["X-Content-Type-Options"]).toBe("nosniff");
-  expect(headers["Referrer-Policy"]).toBe("no-referrer");
-  expect(headers["X-Frame-Options"]).toBe("DENY");
-  expect(headers["Content-Security-Policy"]).toContain("object-src 'none'");
-  expect(headers["Content-Security-Policy"]).not.toContain("'unsafe-eval'");
+it("builds a nonce-based CSP without permissive script directives", () => {
+  const policy = buildContentSecurityPolicy("fixed-nonce");
+  expect(policy).toContain("script-src 'self' 'nonce-fixed-nonce' 'strict-dynamic'");
+  expect(policy).toContain("object-src 'none'");
+  expect(policy).toContain("base-uri 'self'");
+  expect(policy).toContain("frame-ancestors 'none'");
+  expect(policy.slice(0, policy.indexOf("style-src"))).not.toContain("'unsafe-inline'");
+  expect(policy).not.toContain("'unsafe-eval'");
 });
