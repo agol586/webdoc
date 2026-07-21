@@ -2,6 +2,10 @@
 
 DocShare serves multiple local Markdown projects through a responsive web reader with navigation, syntax highlighting, Mermaid diagrams, and live refresh.
 
+## Mermaid diagram controls
+
+Every rendered Mermaid diagram includes controls to zoom in, zoom out, reset the view, and enable pan mode. The mouse wheel also zooms the diagram. Enable pan mode, then drag the diagram to move around a zoomed view.
+
 ## Setup
 
 Requires Node.js 24 or newer; Node 24 is the verified release line. A clean checkout should use `npm ci` for reproducible installation.

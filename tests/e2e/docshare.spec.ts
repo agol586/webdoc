@@ -36,7 +36,15 @@ test("renders image, Mermaid, sanitization, external links, and live updates", a
   try {
     await page.goto("/p/project-alpha/README.md");
     await expect(page.getByRole("img", { name: "Diagram" })).toBeVisible();
-    await expect(page.locator(".mermaid svg")).toHaveCount(2);
+    await expect(page.locator(".mermaid-viewport > svg")).toHaveCount(2);
+    await expect(page.getByRole("button", { name: "Zoom in" })).toHaveCount(2);
+    const firstDiagram = page.locator(".mermaid-diagram").first();
+    const diagramSvg = firstDiagram.locator(".mermaid-viewport > svg");
+    const originalViewBox = await diagramSvg.getAttribute("viewBox");
+    await firstDiagram.getByRole("button", { name: "Zoom in" }).click();
+    await expect(diagramSvg).not.toHaveAttribute("viewBox", originalViewBox!);
+    await firstDiagram.getByRole("button", { name: "Reset view" }).click();
+    await expect(diagramSvg).toHaveAttribute("viewBox", originalViewBox!);
     await expect(page.locator("script[data-secret='raw-html']")).toHaveCount(0);
     await expect(page.getByRole("link", { name: "External documentation" })).toHaveAttribute("target", "_blank");
     await expect(page.getByRole("link", { name: "External documentation" })).toHaveAttribute("rel", "noopener noreferrer");
