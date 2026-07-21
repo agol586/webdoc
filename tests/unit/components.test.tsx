@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 
@@ -44,7 +44,9 @@ const TREE = [
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockMermaidRender.mockResolvedValue({ svg: "<svg><title>diagram</title></svg>" });
+  mockMermaidRender.mockResolvedValue({
+    svg: '<svg viewBox="0 0 100 50"><title>diagram</title></svg>',
+  });
 });
 
 it("switches projects to their homepages", async () => {
@@ -120,6 +122,84 @@ it("removes Mermaid temporary error rendering when rendering fails", async () =>
     "broken",
     expect.any(HTMLDivElement),
   );
+  expect(screen.queryByRole("button", { name: "Zoom in" })).not.toBeInTheDocument();
+});
+
+it("adds accessible icon controls to a successfully rendered Mermaid diagram", async () => {
+  const { container } = render(
+    <MermaidBlocks
+      html={'<pre class="mermaid" data-mermaid-source="flowchart LR\nA --> B"></pre>'}
+      path="README.md"
+    />,
+  );
+
+  const block = container.querySelector<HTMLPreElement>("pre.mermaid")!;
+  for (const name of ["Zoom in", "Zoom out", "Reset view", "Pan diagram"]) {
+    const button = await within(block).findByRole("button", { name });
+    expect(button).toHaveAttribute("title", name);
+    expect(button.querySelector("svg")).toBeInTheDocument();
+  }
+});
+
+it("zooms and resets a Mermaid diagram", async () => {
+  const user = userEvent.setup();
+  const { container } = render(
+    <MermaidBlocks
+      html={'<pre class="mermaid" data-mermaid-source="flowchart LR\nA --> B"></pre>'}
+      path="README.md"
+    />,
+  );
+
+  const view = within(container);
+  const zoomIn = await view.findByRole("button", { name: "Zoom in" });
+  const svg = container.querySelector("pre.mermaid .mermaid-viewport > svg")!;
+  await user.click(zoomIn);
+  expect(svg).toHaveAttribute("viewBox", "10 5 80 40");
+
+  await user.click(view.getByRole("button", { name: "Zoom out" }));
+  expect(svg).toHaveAttribute("viewBox", "0 0 100 50");
+
+  await user.click(zoomIn);
+  await user.click(view.getByRole("button", { name: "Reset view" }));
+  expect(svg).toHaveAttribute("viewBox", "0 0 100 50");
+});
+
+it("supports wheel zoom and pointer dragging in pan mode", async () => {
+  const user = userEvent.setup();
+  const { container } = render(
+    <MermaidBlocks
+      html={'<pre class="mermaid" data-mermaid-source="flowchart LR\nA --> B"></pre>'}
+      path="README.md"
+    />,
+  );
+
+  const view = within(container);
+  const pan = await view.findByRole("button", { name: "Pan diagram" });
+  const viewport = container.querySelector<HTMLElement>(".mermaid-viewport")!;
+  const svg = viewport.querySelector("svg")!;
+  fireEvent.wheel(viewport, { deltaY: -100 });
+  expect(svg).toHaveAttribute("viewBox", "10 5 80 40");
+
+  await user.click(view.getByRole("button", { name: "Reset view" }));
+  await user.click(pan);
+  expect(pan).toHaveAttribute("aria-pressed", "true");
+  vi.spyOn(viewport, "getBoundingClientRect").mockReturnValue({
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 200,
+    bottom: 100,
+    width: 200,
+    height: 100,
+    toJSON: () => ({}),
+  });
+  Object.assign(viewport, { setPointerCapture: vi.fn(), releasePointerCapture: vi.fn() });
+
+  fireEvent.pointerDown(viewport, { pointerId: 1, clientX: 20, clientY: 10 });
+  fireEvent.pointerMove(viewport, { pointerId: 1, clientX: 40, clientY: 20 });
+  fireEvent.pointerUp(viewport, { pointerId: 1 });
+  expect(svg).toHaveAttribute("viewBox", "-10 -5 100 50");
 });
 
 it("normalizes Mermaid source before rendering", async () => {
