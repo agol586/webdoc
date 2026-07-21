@@ -95,11 +95,31 @@ it("previews a deep-linked image through the asset endpoint", () => {
   );
 });
 
-it("shows Mermaid source when rendering fails", async () => {
-  mockMermaidRender.mockRejectedValue(new Error("bad diagram"));
-  render(<MermaidBlocks html={'<pre class="mermaid" data-mermaid-source="broken"></pre>'} path="README.md" />);
+it("removes Mermaid temporary error rendering when rendering fails", async () => {
+  mockMermaidRender.mockImplementation(
+    (_id: string, _source: string, container?: HTMLElement) => {
+      const error = document.createElement("p");
+      error.textContent = "Syntax error in text";
+      (container ?? document.body).append(error);
+      return Promise.reject(new Error("bad diagram"));
+    },
+  );
+
+  render(
+    <MermaidBlocks
+      html={'<pre class="mermaid" data-mermaid-source="broken"></pre>'}
+      path="README.md"
+    />,
+  );
+
   expect(await screen.findByText(/diagram could not be rendered/i)).toBeVisible();
   expect(screen.getByText("broken")).toBeVisible();
+  expect(screen.queryByText("Syntax error in text")).not.toBeInTheDocument();
+  expect(mockMermaidRender).toHaveBeenCalledWith(
+    expect.stringMatching(/^mermaid-.*-0$/),
+    "broken",
+    expect.any(HTMLDivElement),
+  );
 });
 
 it("normalizes Mermaid source before rendering", async () => {
@@ -111,7 +131,11 @@ it("normalizes Mermaid source before rendering", async () => {
   );
 
   await vi.waitFor(() => expect(mockMermaidRender).toHaveBeenCalled());
-  expect(mockMermaidRender).toHaveBeenCalledWith(expect.stringMatching(/^mermaid-.*-0$/), "flowchart LR\n  A --> B");
+  expect(mockMermaidRender).toHaveBeenCalledWith(
+    expect.stringMatching(/^mermaid-.*-0$/),
+    "flowchart LR\n  A --> B",
+    expect.any(HTMLDivElement),
+  );
 });
 
 it("rewrites single-branch sequence par blocks for Mermaid compatibility", async () => {
@@ -126,6 +150,7 @@ it("rewrites single-branch sequence par blocks for Mermaid compatibility", async
   expect(mockMermaidRender).toHaveBeenCalledWith(
     expect.stringMatching(/^mermaid-.*-0$/),
     "sequenceDiagram\n  A->>B: before\n    A->>B: inside\n  B-->>A: after",
+    expect.any(HTMLDivElement),
   );
 });
 
@@ -141,6 +166,7 @@ it("rewrites repeated single-branch par blocks from real sequence docs", async (
   expect(mockMermaidRender).toHaveBeenCalledWith(
     expect.stringMatching(/^mermaid-.*-0$/),
     "sequenceDiagram\n  Loop->>Bot: run()\n    Bot->>Lens: estimateLiquidation(proxy, isDirectRedemption)\n  Lens-->>Bot: amounts 或 error\n    Bot->>RPC: waitForTransactionReceipt(hash, timeout)\n  RPC-->>Bot: success / reverted / rejected",
+    expect.any(HTMLDivElement),
   );
 });
 
@@ -156,6 +182,7 @@ it("rewrites sequence participant aliases that collide with Mermaid keywords", a
   expect(mockMermaidRender).toHaveBeenCalledWith(
     expect.stringMatching(/^mermaid-.*-0$/),
     "sequenceDiagram\n  participant Loop_participant as Polling loop\n  participant Bot\n  Loop_participant->>Bot: run()\n  loop poll\n    Bot->>Bot: work\n  end\n  Bot-->>Loop_participant: done\n  Loop_participant->>Bot: next",
+    expect.any(HTMLDivElement),
   );
 });
 

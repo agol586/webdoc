@@ -110,7 +110,7 @@ export function MermaidBlocks({ html, path }: { html: string; path: string }) {
       const diagram = document.createElement("div");
       diagram.className = "mermaid-diagram";
       node.append(diagram);
-      void mermaid.render(`mermaid-${stableHash(path)}-${index}`, source).then(
+      void mermaid.render(`mermaid-${stableHash(path)}-${index}`, source, diagram).then(
         ({ svg }) => {
           if (!cancelled) diagram.innerHTML = svg;
         },
