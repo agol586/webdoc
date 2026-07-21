@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { resolve } from "node:path";
 
 import { loadConfig } from "../src/config/load";
-import { buildNextArgs, type ServerMode } from "./webdoc-server-args";
+import { buildNextArgs, installChildShutdown, type ServerMode } from "./webdoc-server-args";
 
 async function main(): Promise<void> {
   const mode = process.argv[2];
@@ -18,16 +18,11 @@ async function main(): Promise<void> {
     stdio: "inherit",
   });
 
-  for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    process.on(signal, () => child.kill(signal));
-  }
+  installChildShutdown(child);
 
   child.on("error", (error) => {
     console.error("Failed to start Next.js", error);
     process.exitCode = 1;
-  });
-  child.on("exit", (code) => {
-    process.exitCode = code ?? 1;
   });
 }
 
