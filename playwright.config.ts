@@ -9,7 +9,7 @@ export default defineConfig({
   webServer: {
     command: "npm run build && npm start",
     url: "http://127.0.0.1:3210",
-    env: { ...process.env, WEBDOC_CONFIG: resolve("tests/fixtures/webdoc.config.yaml") },
+    env: { ...process.env, DOCSHARE_CONFIG: resolve("tests/fixtures/docshare.config.yaml") },
     reuseExistingServer: false,
   },
   projects: [

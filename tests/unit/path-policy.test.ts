@@ -10,13 +10,13 @@ describe("resolveInsideRoot", () => {
   it.each(["../secret", "%2e%2e/secret", "/etc/passwd", "C:\\Windows\\win.ini"])(
     "rejects %s",
     async (requested) => {
-      const root = await mkdtemp(join(tmpdir(), "webdoc-root-"));
+      const root = await mkdtemp(join(tmpdir(), "docshare-root-"));
       await expect(resolveInsideRoot(root, requested)).rejects.toThrow(PathPolicyError);
     },
   );
 
   it("rejects a symlink whose canonical target escapes the root", async () => {
-    const parent = await mkdtemp(join(tmpdir(), "webdoc-policy-"));
+    const parent = await mkdtemp(join(tmpdir(), "docshare-policy-"));
     const root = join(parent, "root");
     const outsideFile = join(parent, "secret.md");
     await mkdir(root);
@@ -27,7 +27,7 @@ describe("resolveInsideRoot", () => {
   });
 
   it("allows an internal symlink", async () => {
-    const root = await mkdtemp(join(tmpdir(), "webdoc-root-"));
+    const root = await mkdtemp(join(tmpdir(), "docshare-root-"));
     const guide = join(root, "guide.md");
     await writeFile(guide, "guide");
     await symlink(guide, join(root, "alias.md"));
@@ -36,7 +36,7 @@ describe("resolveInsideRoot", () => {
   });
 
   it("decodes exactly once", async () => {
-    const root = await mkdtemp(join(tmpdir(), "webdoc-root-"));
+    const root = await mkdtemp(join(tmpdir(), "docshare-root-"));
     const literal = join(root, "%2e%2e");
     await mkdir(literal);
     await writeFile(join(literal, "guide.md"), "guide");
@@ -45,7 +45,7 @@ describe("resolveInsideRoot", () => {
   });
 
   it("allows a contained filename that starts with two dots", async () => {
-    const root = await mkdtemp(join(tmpdir(), "webdoc-root-"));
+    const root = await mkdtemp(join(tmpdir(), "docshare-root-"));
     const file = join(root, "..notes.md");
     await writeFile(file, "notes");
 

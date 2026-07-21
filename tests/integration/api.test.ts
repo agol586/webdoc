@@ -26,7 +26,7 @@ async function routes() {
 
 beforeEach(async () => {
   vi.resetModules();
-  fixture = await mkdtemp(join(tmpdir(), "webdoc-api-"));
+  fixture = await mkdtemp(join(tmpdir(), "docshare-api-"));
   fixtures.push(fixture);
   projectRoot = join(fixture, "alpha");
   await mkdir(projectRoot);
@@ -34,14 +34,14 @@ beforeEach(async () => {
   await writeFile(join(projectRoot, "diagram.svg"), '<svg xmlns="http://www.w3.org/2000/svg"/>');
   await writeFile(join(projectRoot, "archive.bin"), "binary");
   await writeFile(
-    join(fixture, "webdoc.config.yaml"),
+    join(fixture, "docshare.config.yaml"),
     "limits:\n  markdownBytes: 16\n  assetBytes: 64\nprojects:\n  - id: alpha\n    title: Alpha\n    path: ./alpha\n",
   );
-  process.env.WEBDOC_CONFIG = join(fixture, "webdoc.config.yaml");
+  process.env.DOCSHARE_CONFIG = join(fixture, "docshare.config.yaml");
 });
 
 afterEach(async () => {
-  delete process.env.WEBDOC_CONFIG;
+  delete process.env.DOCSHARE_CONFIG;
   await Promise.all(fixtures.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
@@ -257,7 +257,7 @@ describe("document APIs", () => {
   });
 
   it("retries server context initialization after a rejected config load", async () => {
-    const configPath = join(fixture, "webdoc.config.yaml");
+    const configPath = join(fixture, "docshare.config.yaml");
     await writeFile(configPath, "projects: []\n");
     const { projects } = await routes();
     expect((await projects()).status).toBe(500);

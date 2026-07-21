@@ -83,5 +83,5 @@ export class ChangeHub {
   }
 }
 
-const globalLive = globalThis as typeof globalThis & { __webdocChangeHub?: ChangeHub };
-export const changeHub = globalLive.__webdocChangeHub ??= new ChangeHub();
+const globalLive = globalThis as typeof globalThis & { __docshareChangeHub?: ChangeHub };
+export const changeHub = globalLive.__docshareChangeHub ??= new ChangeHub();

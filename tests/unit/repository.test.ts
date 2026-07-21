@@ -24,7 +24,7 @@ describe("DocumentRepository", () => {
   let repository: DocumentRepository;
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), "webdoc-repository-"));
+    root = await mkdtemp(join(tmpdir(), "docshare-repository-"));
     project = { id: "docs", title: "Docs", root };
     repository = new DocumentRepository();
   });
@@ -70,7 +70,7 @@ describe("DocumentRepository", () => {
   });
 
   it("omits escaping and broken symlinks and breaks directory cycles", async () => {
-    const outside = await mkdtemp(join(tmpdir(), "webdoc-outside-"));
+    const outside = await mkdtemp(join(tmpdir(), "docshare-outside-"));
     await writeFile(join(outside, "secret.md"), "secret");
     await mkdir(join(root, "guide"));
     await writeFile(join(root, "guide", "intro.md"), "intro");

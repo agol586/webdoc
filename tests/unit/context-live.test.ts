@@ -19,13 +19,13 @@ beforeEach(async () => {
   vi.resetModules();
   close.mockClear();
   start.mockClear();
-  delete (globalThis as typeof globalThis & { __webdocServerHolder?: unknown }).__webdocServerHolder;
-  fixture = await mkdtemp(join(tmpdir(), "webdoc-context-"));
+  delete (globalThis as typeof globalThis & { __docshareServerHolder?: unknown }).__docshareServerHolder;
+  fixture = await mkdtemp(join(tmpdir(), "docshare-context-"));
 });
 
 afterEach(async () => {
-  delete process.env.WEBDOC_CONFIG;
-  delete (globalThis as typeof globalThis & { __webdocServerHolder?: unknown }).__webdocServerHolder;
+  delete process.env.DOCSHARE_CONFIG;
+  delete (globalThis as typeof globalThis & { __docshareServerHolder?: unknown }).__docshareServerHolder;
   await rm(fixture, { recursive: true, force: true });
 });
 
@@ -39,7 +39,7 @@ async function config(name: string, id: string): Promise<string> {
 
 it("shares context across HMR reloads and safely replaces runtime when config path changes", async () => {
   const alpha = await config("alpha", "alpha");
-  process.env.WEBDOC_CONFIG = alpha;
+  process.env.DOCSHARE_CONFIG = alpha;
   const firstModule = await import("../../src/server/context");
   const firstContext = await firstModule.getServerContext();
   expect((await firstModule.getLiveRuntime()).context).toBe(firstContext);
@@ -50,7 +50,7 @@ it("shares context across HMR reloads and safely replaces runtime when config pa
   expect((await reloadedModule.getLiveRuntime()).context).toBe(firstContext);
   expect(start).toHaveBeenCalledTimes(1);
 
-  process.env.WEBDOC_CONFIG = await config("beta", "beta");
+  process.env.DOCSHARE_CONFIG = await config("beta", "beta");
   const betaContext = await reloadedModule.getServerContext();
   const betaRuntime = await reloadedModule.getLiveRuntime();
   expect(betaContext).not.toBe(firstContext);
@@ -62,15 +62,15 @@ it("shares context across HMR reloads and safely replaces runtime when config pa
 it("chains A to B to A teardown without starting a replacement early", async () => {
   const alpha = await config("alpha", "alpha");
   const beta = await config("beta", "beta");
-  process.env.WEBDOC_CONFIG = alpha;
+  process.env.DOCSHARE_CONFIG = alpha;
   const server = await import("../../src/server/context");
   await server.getLiveRuntime();
   let releaseClose!: () => void;
   close.mockImplementationOnce(() => new Promise<void>((resolve) => { releaseClose = resolve; }));
 
-  process.env.WEBDOC_CONFIG = beta;
+  process.env.DOCSHARE_CONFIG = beta;
   const betaRuntime = server.getLiveRuntime().catch(() => undefined);
-  process.env.WEBDOC_CONFIG = alpha;
+  process.env.DOCSHARE_CONFIG = alpha;
   const finalAlpha = server.getLiveRuntime();
   await vi.waitFor(() => expect(releaseClose).toBeTypeOf("function"));
   expect(start).toHaveBeenCalledTimes(1);
@@ -83,7 +83,7 @@ it("chains A to B to A teardown without starting a replacement early", async () 
 it("marks health connected only after the current path runtime starts", async () => {
   const { changeHub } = await import("../../src/live/change-hub");
   changeHub.publish({ kind: "status", status: "degraded" });
-  process.env.WEBDOC_CONFIG = await config("alpha", "alpha");
+  process.env.DOCSHARE_CONFIG = await config("alpha", "alpha");
   const server = await import("../../src/server/context");
   await server.getLiveRuntime();
   const abort = new AbortController();

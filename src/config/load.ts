@@ -12,13 +12,13 @@ export type ProjectConfig = {
   homepage?: string;
 };
 
-export type WebDocConfig = {
+export type DocShareConfig = {
   server: { host: string; port: number };
   limits: { markdownBytes: number; assetBytes: number };
   projects: ProjectConfig[];
 };
 
-export async function loadConfig(configPath: string): Promise<WebDocConfig> {
+export async function loadConfig(configPath: string): Promise<DocShareConfig> {
   const source = await readFile(configPath, "utf8");
   const parsed = RawConfigSchema.parse(parseYaml(source));
   const base = dirname(resolve(configPath));

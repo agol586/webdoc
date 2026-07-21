@@ -1,13 +1,13 @@
 {
-  "name": "webdoc",
+  "name": "docshare",
   "version": "0.1.0",
   "private": true,
   "engines": { "node": ">=24" },
   "scripts": {
-    "dev": "tsx scripts/webdoc-server.ts dev",
+    "dev": "tsx scripts/docshare-server.ts dev",
     "build": "next build",
-    "start": "tsx scripts/webdoc-server.ts start",
-    "boot": "bash scripts/start-webdoc.sh",
+    "start": "tsx scripts/docshare-server.ts start",
+    "boot": "bash scripts/start-docshare.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

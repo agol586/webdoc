@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 import { resolve } from "node:path";
 import { expect, it, vi } from "vitest";
 
-import { buildNextArgs, installChildShutdown } from "../../scripts/webdoc-server-args";
+import { buildNextArgs, installChildShutdown } from "../../scripts/docshare-server-args";
 
 const execFileAsync = promisify(execFile);
 
@@ -21,9 +21,9 @@ it("uses the configured host and port for production", () => {
 });
 
 it("loads the executable entry point before validating its mode", async () => {
-  const result = await execFileAsync(resolve("node_modules/.bin/tsx"), ["scripts/webdoc-server.ts", "invalid"])
+  const result = await execFileAsync(resolve("node_modules/.bin/tsx"), ["scripts/docshare-server.ts", "invalid"])
     .catch((error: unknown) => error as { stderr: string });
-  expect(result.stderr).toContain("Usage: webdoc-server <dev|start>");
+  expect(result.stderr).toContain("Usage: docshare-server <dev|start>");
   expect(result.stderr).not.toContain("Top-level await");
 });
 

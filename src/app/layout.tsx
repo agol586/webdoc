@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 import "./globals.css";
 
-export const metadata: Metadata = { title: "WebDoc", description: "Local project documentation" };
+export const metadata: Metadata = { title: "DocShare", description: "Local project documentation" };
 
 export const dynamic = "force-dynamic";
 

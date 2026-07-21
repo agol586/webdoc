@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart LR
-  A[Markdown] --> B[WebDoc]
+  A[Markdown] --> B[DocShare]
 ```
 
 ```mermaid

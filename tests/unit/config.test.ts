@@ -8,7 +8,7 @@ import { loadConfig } from "../../src/config/load";
 const fixtureDirectories: string[] = [];
 
 async function createFixture(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "webdoc-config-"));
+  const directory = await mkdtemp(join(tmpdir(), "docshare-config-"));
   fixtureDirectories.push(directory);
   await mkdir(join(directory, "alpha"));
   return directory;
@@ -16,7 +16,7 @@ async function createFixture(): Promise<string> {
 
 async function loadFixtureConfig(source: string) {
   const directory = await createFixture();
-  const configPath = join(directory, "webdoc.config.yaml");
+  const configPath = join(directory, "docshare.config.yaml");
   await writeFile(configPath, source, "utf8");
   return { config: await loadConfig(configPath), directory };
 }
@@ -59,7 +59,7 @@ describe("loadConfig", () => {
     const directory = await createFixture();
     await mkdir(join(directory, "alpha", "guide"));
     await writeFile(join(directory, "alpha", "guide", "start.md"), "home");
-    const configPath = join(directory, "webdoc.config.yaml");
+    const configPath = join(directory, "docshare.config.yaml");
     await writeFile(configPath,
       "server:\n  host: 0.0.0.0\n  port: 8080\nlimits:\n  markdownBytes: 100\n  assetBytes: 200\nprojects:\n  - id: alpha\n    title: Alpha\n    path: ./alpha\n    homepage: guide/start.md\n",
     );
@@ -74,7 +74,7 @@ describe("loadConfig", () => {
     const directory = await createFixture();
     await mkdir(join(directory, "alpha", "folder.md"));
     await writeFile(join(directory, "alpha", "notes.txt"), "notes");
-    const configPath = join(directory, "webdoc.config.yaml");
+    const configPath = join(directory, "docshare.config.yaml");
     await writeFile(configPath, `projects:\n  - id: alpha\n    title: Alpha\n    path: ./alpha\n    homepage: ${homepage}\n`);
     await expect(loadConfig(configPath)).rejects.toThrow(/homepage|markdown|outside|regular/i);
   });
@@ -114,6 +114,6 @@ describe("server scripts", () => {
       scripts: Record<string, string>;
     };
 
-    expect(packageJson.scripts[script]).toBe(`tsx scripts/webdoc-server.ts ${script}`);
+    expect(packageJson.scripts[script]).toBe(`tsx scripts/docshare-server.ts ${script}`);
   });
 });

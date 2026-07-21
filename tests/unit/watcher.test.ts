@@ -8,7 +8,7 @@ import { ChangeHub } from "../../src/live/change-hub";
 import { ProjectWatcher, type WatchHandle } from "../../src/live/watcher";
 import { DocumentRepository } from "../../src/repository/repository";
 import type { ServerContext } from "../../src/server/context";
-import type { WebDocConfig } from "../../src/config/load";
+import type { DocShareConfig } from "../../src/config/load";
 
 let fixture: string;
 let alphaRoot: string;
@@ -34,10 +34,10 @@ function emit(event: string, ...args: unknown[]) {
 
 beforeEach(async () => {
   vi.useFakeTimers();
-  fixture = await mkdtemp(join(tmpdir(), "webdoc-watch-"));
+  fixture = await mkdtemp(join(tmpdir(), "docshare-watch-"));
   alphaRoot = join(fixture, "alpha");
   await mkdir(alphaRoot);
-  configPath = join(fixture, "webdoc.config.yaml");
+  configPath = join(fixture, "docshare.config.yaml");
   await writeFile(configPath, "projects:\n  - id: alpha\n    title: Alpha\n    path: ./alpha\n");
 });
 afterEach(async () => {
@@ -158,7 +158,7 @@ describe("ProjectWatcher", () => {
     emit("error", new Error("overflow"));
     await vi.waitFor(() => expect(hub.publish).toHaveBeenCalledWith({ kind: "status", status: "degraded" }));
     expect(repository.getTree).not.toHaveBeenCalled();
-    expect(diagnostic).toHaveBeenCalledWith("WebDoc watcher recovery failed", expect.objectContaining({ category: "Error", message: expect.stringMatching(/budget/i) }));
+    expect(diagnostic).toHaveBeenCalledWith("DocShare watcher recovery failed", expect.objectContaining({ category: "Error", message: expect.stringMatching(/budget/i) }));
   });
 
   it("close aborts and awaits recovery without publishing afterward", async () => {
@@ -178,14 +178,14 @@ describe("ProjectWatcher", () => {
     (hub.publish as ReturnType<typeof vi.fn>).mockClear();
     await watcher.close();
     expect(hub.publish).not.toHaveBeenCalled();
-    expect(diagnostic).not.toHaveBeenCalledWith("WebDoc watcher recovery failed", expect.anything());
+    expect(diagnostic).not.toHaveBeenCalledWith("DocShare watcher recovery failed", expect.anything());
   });
 
   it("serializes overlapping reloads so the latest disk generation wins", async () => {
     const hub = { publish: vi.fn() } as unknown as ChangeHub;
     const context: ServerContext = { config: { server: { host: "127.0.0.1", port: 3000 }, limits: { markdownBytes: 1, assetBytes: 1 }, projects: [{ id: "alpha", title: "Alpha", root: alphaRoot }] }, repository: new DocumentRepository() };
-    const releases: Array<(config: WebDocConfig) => void> = [];
-    const loader = vi.fn(() => new Promise<WebDocConfig>((resolve) => releases.push(resolve)));
+    const releases: Array<(config: DocShareConfig) => void> = [];
+    const loader = vi.fn(() => new Promise<DocShareConfig>((resolve) => releases.push(resolve)));
     const watcher = new ProjectWatcher(context, hub, configPath, () => fakeWatch(), loader);
     await watcher.start(context.config);
     const first = watcher.reloadConfig();
@@ -202,8 +202,8 @@ describe("ProjectWatcher", () => {
     const hub = { publish: vi.fn() } as unknown as ChangeHub;
     const original = { server: { host: "127.0.0.1", port: 3000 }, limits: { markdownBytes: 1, assetBytes: 1 }, projects: [{ id: "alpha", title: "Alpha", root: alphaRoot }] };
     const context: ServerContext = { config: original, repository: new DocumentRepository() };
-    let release!: (config: WebDocConfig) => void;
-    const loader = () => new Promise<WebDocConfig>((resolve) => { release = resolve; });
+    let release!: (config: DocShareConfig) => void;
+    const loader = () => new Promise<DocShareConfig>((resolve) => { release = resolve; });
     const watcher = new ProjectWatcher(context, hub, configPath, () => fakeWatch(), loader);
     await watcher.start(context.config);
     const reload = watcher.reloadConfig();
@@ -264,7 +264,7 @@ describe("ProjectWatcher", () => {
     expect(recoverySignal?.aborted).toBe(true);
     await vi.waitFor(() => expect(hub.publish).toHaveBeenCalledWith({ kind: "status", status: "degraded" }));
     expect(hub.publish).not.toHaveBeenCalledWith({ kind: "status", status: "connected" });
-    expect(diagnostic).toHaveBeenCalledWith("WebDoc config reload rejected", expect.objectContaining({ category: "Error", message: "invalid" }));
-    expect(diagnostic).not.toHaveBeenCalledWith("WebDoc watcher recovery failed", expect.anything());
+    expect(diagnostic).toHaveBeenCalledWith("DocShare config reload rejected", expect.objectContaining({ category: "Error", message: "invalid" }));
+    expect(diagnostic).not.toHaveBeenCalledWith("DocShare watcher recovery failed", expect.anything());
   });
 });

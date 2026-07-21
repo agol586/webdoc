@@ -2,7 +2,7 @@ import { relative, resolve, sep } from "node:path";
 
 import chokidar from "chokidar";
 
-import { loadConfig, type WebDocConfig } from "../config/load";
+import { loadConfig, type DocShareConfig } from "../config/load";
 import type { ServerContext } from "../server/context";
 import type { ChangeHub } from "./change-hub";
 
@@ -14,7 +14,7 @@ export type WatchHandle = {
 };
 
 type WatchFactory = (paths: string[]) => WatchHandle;
-type ConfigLoader = (path: string) => Promise<WebDocConfig>;
+type ConfigLoader = (path: string) => Promise<DocShareConfig>;
 
 export class ProjectWatcher {
   private handle?: WatchHandle;
@@ -38,7 +38,7 @@ export class ProjectWatcher {
     private readonly load: ConfigLoader = loadConfig,
   ) {}
 
-  async start(config: WebDocConfig): Promise<void> {
+  async start(config: DocShareConfig): Promise<void> {
     if (this.closed) throw new Error("Cannot start a closed project watcher");
     if (this.handle) return;
     this.roots = new Map(config.projects.map((project) => [project.id, project.root]));
@@ -134,7 +134,7 @@ export class ProjectWatcher {
         this.hub.publish({ kind: "config" });
         this.hub.publish({ kind: "status", status: "connected" });
       } catch (error) {
-        console.error("WebDoc config reload rejected", { category: error instanceof Error ? error.name : "UnknownError", message: error instanceof Error ? error.message : String(error) });
+        console.error("DocShare config reload rejected", { category: error instanceof Error ? error.name : "UnknownError", message: error instanceof Error ? error.message : String(error) });
         if (!this.isCurrent(token)) return;
         if (version === this.reloadVersion) this.hub.publish({ kind: "status", status: "degraded" });
       }
@@ -166,7 +166,7 @@ export class ProjectWatcher {
       }
     } catch (error) {
       if (!this.isRecoveryCurrent(token, epoch)) return;
-      console.error("WebDoc watcher recovery failed", { category: error instanceof Error ? error.name : "UnknownError", message: error instanceof Error ? error.message : String(error) });
+      console.error("DocShare watcher recovery failed", { category: error instanceof Error ? error.name : "UnknownError", message: error instanceof Error ? error.message : String(error) });
       // Stay degraded; another watcher error can initiate a later bounded rescan.
     } finally {
       clearTimeout(deadline);

@@ -3,13 +3,13 @@ import { createRequire } from "node:module";
 import { resolve } from "node:path";
 
 import { loadConfig } from "../src/config/load";
-import { buildNextArgs, installChildShutdown, type ServerMode } from "./webdoc-server-args";
+import { buildNextArgs, installChildShutdown, type ServerMode } from "./docshare-server-args";
 
 async function main(): Promise<void> {
   const mode = process.argv[2];
-  if (mode !== "dev" && mode !== "start") throw new Error("Usage: webdoc-server <dev|start>");
+  if (mode !== "dev" && mode !== "start") throw new Error("Usage: docshare-server <dev|start>");
 
-  const configPath = resolve(process.env.WEBDOC_CONFIG ?? resolve(process.cwd(), "webdoc.config.yaml"));
+  const configPath = resolve(process.env.DOCSHARE_CONFIG ?? resolve(process.cwd(), "docshare.config.yaml"));
   const config = await loadConfig(configPath);
   const require = createRequire(import.meta.url);
   const nextCli = require.resolve("next/dist/bin/next");

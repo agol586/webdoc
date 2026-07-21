@@ -1,4 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="240" height="80" role="img" aria-label="Diagram">
   <rect width="240" height="80" rx="8" fill="#d9e6fb"/>
-  <text x="120" y="46" text-anchor="middle" font-family="sans-serif">WebDoc diagram</text>
+  <text x="120" y="46" text-anchor="middle" font-family="sans-serif">DocShare diagram</text>
 </svg>
