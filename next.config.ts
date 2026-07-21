@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["*"],
   async headers() {
     return [{
       source: "/:path*",
@@ -14,7 +15,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-
-module.exports = {
-  allowedDevOrigins: ['*'],
-}
