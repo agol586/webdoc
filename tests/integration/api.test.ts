@@ -33,9 +33,12 @@ beforeEach(async () => {
   await writeFile(join(projectRoot, "README.md"), "# Alpha\n");
   await writeFile(join(projectRoot, "diagram.svg"), '<svg xmlns="http://www.w3.org/2000/svg"/>');
   await writeFile(join(projectRoot, "archive.bin"), "binary");
+  await writeFile(join(projectRoot, "hidden.excluded.md"), "# Hidden\n");
+  await mkdir(join(projectRoot, "private"));
+  await writeFile(join(projectRoot, "private", "asset.bin"), "private");
   await writeFile(
     join(fixture, "docshare.config.yaml"),
-    "limits:\n  markdownBytes: 16\n  assetBytes: 64\nprojects:\n  - id: alpha\n    title: Alpha\n    path: ./alpha\n",
+    "limits:\n  markdownBytes: 16\n  assetBytes: 64\nprojects:\n  - id: alpha\n    title: Alpha\n    path: ./alpha\n    exclude:\n      - '**/*.excluded.md'\n      - private\n",
   );
   process.env.DOCSHARE_CONFIG = join(fixture, "docshare.config.yaml");
 });
@@ -65,6 +68,15 @@ describe("document APIs", () => {
     });
   });
 
+  it("omits excluded files and directories from the project tree", async () => {
+    const response = await (await routes()).tree(new Request("http://localhost"), context("alpha"));
+    const body = JSON.stringify(await response.json());
+
+    expect(response.status).toBe(200);
+    expect(body).not.toContain("hidden.excluded.md");
+    expect(body).not.toContain("private");
+  });
+
   it("returns rendered document HTML", async () => {
     const response = await (await routes()).content(
       new Request("http://localhost"),
@@ -76,6 +88,16 @@ describe("document APIs", () => {
       html: expect.stringContaining("<h1"),
       title: "Alpha",
     });
+  });
+
+  it("forbids direct access to excluded Markdown", async () => {
+    const response = await (await routes()).content(
+      new Request("http://localhost"),
+      context("alpha", ["hidden.excluded.md"]),
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "Forbidden" });
   });
 
   it("serves SVG as an image with hardened headers", async () => {
@@ -99,6 +121,16 @@ describe("document APIs", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/octet-stream");
     expect(response.headers.get("content-disposition")).toBe('attachment; filename="archive.bin"');
+  });
+
+  it("forbids direct access to assets below an excluded directory", async () => {
+    const response = await (await routes()).assets(
+      new Request("http://localhost"),
+      context("alpha", ["private", "asset.bin"]),
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "Forbidden" });
   });
 
   it("uses an ASCII fallback and RFC 5987 filename for Unicode attachments", async () => {

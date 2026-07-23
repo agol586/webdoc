@@ -4,6 +4,7 @@ import { extname } from "node:path";
 import { Readable } from "node:stream";
 
 import type { ProjectConfig } from "../config/load";
+import { isExcludedTarget } from "../lib/exclusions";
 import { resolveInsideRoot, validateHomepagePath } from "../lib/path-policy";
 import type { TreeNode } from "./types";
 
@@ -44,6 +45,12 @@ function checkScan(state: ScanState, countEntry = false): void {
 
 function notRegularFile(): NodeJS.ErrnoException {
   const error = new Error("Requested path is not a regular file") as NodeJS.ErrnoException;
+  error.code = "EACCES";
+  return error;
+}
+
+function excludedPath(): NodeJS.ErrnoException {
+  const error = new Error("Requested path is excluded") as NodeJS.ErrnoException;
   error.code = "EACCES";
   return error;
 }
@@ -116,10 +123,16 @@ export class DocumentRepository {
   async getTree(project: ProjectConfig, options: TreeScanOptions = {}): Promise<TreeNode[]> {
     const state: ScanState = { signal: options.signal, maxEntries: options.maxEntries ?? Number.POSITIVE_INFINITY, entries: 0 };
     checkScan(state);
-    return this.scanDirectory(project.root, "", new Set([project.root]), state);
+    return this.scanDirectory(project.root, project.exclude ?? [], "", new Set([project.root]), state);
   }
 
-  private async scanDirectory(root: string, relativeDirectory: string, visited: Set<string>, state: ScanState): Promise<TreeNode[]> {
+  private async scanDirectory(
+    root: string,
+    exclusions: readonly string[],
+    relativeDirectory: string,
+    visited: Set<string>,
+    state: ScanState,
+  ): Promise<TreeNode[]> {
     checkScan(state);
     const directory = relativeDirectory ? await resolveInsideRoot(root, relativeDirectory) : root;
     checkScan(state);
@@ -139,11 +152,18 @@ export class DocumentRepository {
 
       const metadata = await stat(canonical);
       checkScan(state);
+      if (
+        isExcludedTarget(root, exclusions, relativePath, canonical, {
+          directory: metadata.isDirectory(),
+        })
+      ) {
+        continue;
+      }
       if (metadata.isDirectory()) {
         if (visited.has(canonical)) continue;
         visited.add(canonical);
         checkScan(state);
-        const children = await this.scanDirectory(root, relativePath, visited, state);
+        const children = await this.scanDirectory(root, exclusions, relativePath, visited, state);
         nodes.push({ kind: "directory", name: entry.name, path: relativePath, children });
       } else if (metadata.isFile()) {
         nodes.push({
@@ -181,12 +201,18 @@ export class DocumentRepository {
   }
 
   private async validateHomepage(project: ProjectConfig, requested: string): Promise<void> {
+    const canonical = await resolveInsideRoot(project.root, requested);
+    if (isExcludedTarget(project.root, project.exclude ?? [], requested, canonical)) {
+      throw new InvalidHomepageError("Configured homepage is excluded");
+    }
     await validateHomepagePath(project.root, requested);
   }
 
   async read(project: ProjectConfig, path: string, limit: number): Promise<Buffer> {
     const canonical = await resolveInsideRoot(project.root, path);
-    if (!(await stat(canonical)).isFile()) throw notRegularFile();
+    const metadata = await stat(canonical);
+    if (isExcludedTarget(project.root, project.exclude ?? [], path, canonical)) throw excludedPath();
+    if (!metadata.isFile()) throw notRegularFile();
     const handle = await open(canonical, safeOpenFlags);
     try {
       const metadata = await handle.stat();
@@ -209,7 +235,9 @@ export class DocumentRepository {
     close: () => void;
   }> {
     const canonical = await resolveInsideRoot(project.root, path);
-    if (!(await stat(canonical)).isFile()) throw notRegularFile();
+    const metadata = await stat(canonical);
+    if (isExcludedTarget(project.root, project.exclude ?? [], path, canonical)) throw excludedPath();
+    if (!metadata.isFile()) throw notRegularFile();
     const handle = await open(canonical, safeOpenFlags);
     try {
       const metadata = await handle.stat();

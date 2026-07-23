@@ -38,6 +38,10 @@ projects:
     title: Product Documentation
     path: ./docs
     homepage: README.md
+    exclude:
+      - "**/node_modules/**"
+      - "**/*.draft.md"
+      - private
 ```
 
 - `server.host` and `server.port` control the exact listener used by both `npm run dev` and `npm start`. Defaults are `127.0.0.1:3030`; binding `0.0.0.0` requires an explicit YAML value.
@@ -45,6 +49,7 @@ projects:
 - `limits.assetBytes` defaults to 25 MiB and limits images and downloadable attachments.
 - Every `projects` entry needs a URL-safe lowercase `id`, display `title`, and directory `path`. Paths are resolved relative to the config file.
 - `homepage` is optional and must name Markdown inside the project. An explicit homepage wins; otherwise DocShare tries root `README.md`, then root `index.md`, then the first Markdown document for navigation fallbacks.
+- `exclude` is an optional per-project list of case-sensitive glob patterns matched against `/`-separated paths relative to the project root. Exact directory matches exclude all descendants, while patterns such as `**/node_modules/**` prune every matching directory. Excluded files and directories are omitted from navigation and cannot be read through document or asset URLs. An explicit `homepage` must not match an exclusion.
 
 `npm audit` currently reports 2 moderate vulnerabilities in transitive development dependencies. Review them when updating the lockfile. Keep npm lifecycle scripts restricted with your environment's `allowScripts` policy, and explicitly review any package newly permitted to run install scripts.
 

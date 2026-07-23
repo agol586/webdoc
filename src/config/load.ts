@@ -3,13 +3,15 @@ import { dirname, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import { RawConfigSchema } from "./schema";
-import { validateHomepagePath } from "../lib/path-policy";
+import { isExcludedTarget } from "../lib/exclusions";
+import { resolveInsideRoot, validateHomepagePath } from "../lib/path-policy";
 
 export type ProjectConfig = {
   id: string;
   title: string;
   root: string;
   homepage?: string;
+  exclude?: string[];
 };
 
 export type DocShareConfig = {
@@ -25,8 +27,15 @@ export async function loadConfig(configPath: string): Promise<DocShareConfig> {
   const projects = await Promise.all(
     parsed.projects.map(async (project) => {
       const root = await realpath(resolve(base, project.path));
-      if (project.homepage !== undefined) await validateHomepagePath(root, project.homepage);
-      return { id: project.id, title: project.title, root, homepage: project.homepage };
+      const exclude = project.exclude ?? [];
+      if (project.homepage !== undefined) {
+        await validateHomepagePath(root, project.homepage);
+        const homepage = await resolveInsideRoot(root, project.homepage);
+        if (isExcludedTarget(root, exclude, project.homepage, homepage)) {
+          throw new Error("Homepage validation failed: homepage is excluded");
+        }
+      }
+      return { id: project.id, title: project.title, root, homepage: project.homepage, exclude };
     }),
   );
 

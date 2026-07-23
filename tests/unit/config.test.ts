@@ -37,6 +37,7 @@ describe("loadConfig", () => {
       assetBytes: 25 * 1024 * 1024,
     });
     expect(config.projects[0].root).toBe(await realpath(join(directory, "alpha")));
+    expect(config.projects[0].exclude).toEqual([]);
   });
 
   it.each(["../bad", "has space", ""])('rejects project id %j', async (id) => {
@@ -68,6 +69,34 @@ describe("loadConfig", () => {
     expect(config.server).toEqual({ host: "0.0.0.0", port: 8080 });
     expect(config.limits).toEqual({ markdownBytes: 100, assetBytes: 200 });
     expect(config.projects[0].homepage).toBe("guide/start.md");
+  });
+
+  it("accepts project exclusion globs", async () => {
+    const { config } = await loadFixtureConfig(
+      "projects:\n  - id: alpha\n    title: Alpha\n    path: ./alpha\n    exclude:\n      - '**/*.draft.md'\n      - private\n",
+    );
+
+    expect(config.projects[0].exclude).toEqual(["**/*.draft.md", "private"]);
+  });
+
+  it("rejects empty project exclusion globs", async () => {
+    await expect(
+      loadFixtureConfig(
+        "projects:\n  - id: alpha\n    title: Alpha\n    path: ./alpha\n    exclude:\n      - ''\n",
+      ),
+    ).rejects.toThrow(/exclude/i);
+  });
+
+  it("rejects an explicit homepage excluded by the project", async () => {
+    const directory = await createFixture();
+    await writeFile(join(directory, "alpha", "README.md"), "home");
+    const configPath = join(directory, "docshare.config.yaml");
+    await writeFile(
+      configPath,
+      "projects:\n  - id: alpha\n    title: Alpha\n    path: ./alpha\n    homepage: README.md\n    exclude:\n      - README.md\n",
+    );
+
+    await expect(loadConfig(configPath)).rejects.toThrow(/homepage.*excluded/i);
   });
 
   it.each(["../outside.md", "missing.md", "folder.md", "notes.txt"])("rejects invalid explicit homepage %s", async (homepage) => {

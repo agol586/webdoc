@@ -7,6 +7,7 @@ const ProjectSchema = z.object({
   title: z.string().min(1, "Project title must not be empty"),
   path: z.string().min(1, "Project path must not be empty"),
   homepage: z.string().min(1, "Project homepage must not be empty").optional(),
+  exclude: z.array(z.string().min(1, "Exclude pattern must not be empty")).optional(),
 });
 
 export const RawConfigSchema = z.object({

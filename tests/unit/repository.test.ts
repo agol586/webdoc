@@ -18,6 +18,13 @@ function names(nodes: TreeNode[]): string[] {
   return nodes.map((node) => node.name);
 }
 
+function paths(nodes: TreeNode[]): string[] {
+  return nodes.flatMap((node) => [
+    node.path,
+    ...(node.kind === "directory" ? paths(node.children) : []),
+  ]);
+}
+
 describe("DocumentRepository", () => {
   let root: string;
   let project: ProjectConfig;
@@ -56,6 +63,24 @@ describe("DocumentRepository", () => {
       { kind: "image", name: "logo.PNG", path: "logo.PNG", size: 3 },
       { kind: "attachment", name: "notes.txt", path: "notes.txt", size: 4 },
     ]);
+  });
+
+  it("omits excluded files and prunes excluded directory subtrees", async () => {
+    await mkdir(join(root, "guide"));
+    await mkdir(join(root, "private"));
+    await mkdir(join(root, "pkg", "node_modules"), { recursive: true });
+    await Promise.all([
+      writeFile(join(root, "README.md"), "home"),
+      writeFile(join(root, "guide", "public.md"), "public"),
+      writeFile(join(root, "guide", "hidden.draft.md"), "draft"),
+      writeFile(join(root, "private", "secret.md"), "secret"),
+      writeFile(join(root, "pkg", "node_modules", "dependency.md"), "dependency"),
+    ]);
+    project.exclude = ["README.md", "**/*.draft.md", "private", "**/node_modules/**"];
+
+    const tree = await repository.getTree(project);
+    expect(paths(tree)).toEqual(["guide", "guide/public.md", "pkg"]);
+    expect(await repository.chooseHomepage(project, tree)).toBe("guide/public.md");
   });
 
   it("aborts a tree scan when its entry budget is exhausted", async () => {
@@ -116,6 +141,15 @@ describe("DocumentRepository", () => {
     expect(await repository.chooseHomepage(project)).toBe("index.md");
   });
 
+  it("skips excluded automatic homepage candidates without a supplied tree", async () => {
+    await writeFile(join(root, "README.md"), "excluded");
+    await writeFile(join(root, "index.md"), "home");
+
+    expect(
+      await repository.chooseHomepage({ ...project, exclude: ["README.md"] }),
+    ).toBe("index.md");
+  });
+
   it.each(["../outside.md", "/etc/passwd"])("rejects unsafe configured homepage %s", async (homepage) => {
     await expect(repository.chooseHomepage({ ...project, homepage })).rejects.toThrow(/path|absolute|outside/i);
   });
@@ -123,6 +157,13 @@ describe("DocumentRepository", () => {
   it("requires a configured homepage to be a Markdown file", async () => {
     await writeFile(join(root, "start.txt"), "home");
     await expect(repository.chooseHomepage({ ...project, homepage: "start.txt" })).rejects.toThrow(/markdown/i);
+  });
+
+  it("rejects an excluded configured homepage", async () => {
+    await writeFile(join(root, "start.md"), "home");
+    await expect(
+      repository.chooseHomepage({ ...project, homepage: "start.md", exclude: ["start.md"] }),
+    ).rejects.toThrow(/excluded/i);
   });
 
   it("rejects content larger than the supplied limit before buffering", async () => {
@@ -134,6 +175,26 @@ describe("DocumentRepository", () => {
     await writeFile(join(root, "guide.md"), "guide");
     expect(await repository.read(project, "guide.md", 8)).toEqual(Buffer.from("guide"));
     await expect(repository.read(project, "../secret.md", 8)).rejects.toThrow(/outside/i);
+  });
+
+  it("rejects direct reads and streams for excluded content", async () => {
+    await mkdir(join(root, "private"));
+    await writeFile(join(root, "hidden.draft.md"), "draft");
+    await writeFile(join(root, "private", "asset.bin"), "asset");
+    project.exclude = ["**/*.draft.md", "private"];
+
+    await expect(repository.read(project, "hidden.draft.md", 16)).rejects.toMatchObject({ code: "EACCES" });
+    await expect(repository.stream(project, "private/asset.bin", 16)).rejects.toMatchObject({ code: "EACCES" });
+  });
+
+  it("rejects an allowed symlink alias whose canonical target is excluded", async () => {
+    await mkdir(join(root, "private"));
+    await writeFile(join(root, "private", "secret.md"), "secret");
+    await symlink(join(root, "private", "secret.md"), join(root, "alias.md"));
+
+    await expect(
+      repository.read({ ...project, exclude: ["private"] }, "alias.md", 16),
+    ).rejects.toMatchObject({ code: "EACCES" });
   });
 
   it("rejects directories as content and assets", async () => {

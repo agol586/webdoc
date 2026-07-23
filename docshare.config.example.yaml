@@ -9,3 +9,7 @@ projects:
     title: Example Project
     path: ./docs
     homepage: README.md
+    exclude:
+      - "**/node_modules/**"
+      - "**/*.draft.md"
+      - private
