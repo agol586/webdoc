@@ -14,6 +14,17 @@ export interface RewriteRelativeUrlsOptions {
   documentPath: string;
 }
 
+export interface RewriteRemoteUrlsOptions {
+  baseUrl: string;
+}
+
+export class MarkdownUrlError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MarkdownUrlError";
+  }
+}
+
 function decodedForSchemeCheck(url: string): string {
   let decoded = url;
   for (let pass = 0; pass < 8; pass += 1) {
@@ -43,12 +54,12 @@ function splitSuffix(url: string): { pathname: string; suffix: string } {
 function assertRemainingEncodingIsNonStructural(pathname: string, url: string): void {
   let probe = pathname;
   for (let pass = 0; /%[\da-f]{2}/i.test(probe); pass += 1) {
-    if (pass === 8) throw new Error(`Excessively encoded relative URL: ${url}`);
+    if (pass === 8) throw new MarkdownUrlError(`Excessively encoded relative URL: ${url}`);
     let decoded: string;
     try {
       decoded = decodeURIComponent(probe);
     } catch {
-      throw new Error(`Invalid encoded relative URL: ${url}`);
+      throw new MarkdownUrlError(`Invalid encoded relative URL: ${url}`);
     }
 
     const introducedSeparator =
@@ -56,7 +67,7 @@ function assertRemainingEncodingIsNonStructural(pathname: string, url: string): 
       decoded.split("\\").length > probe.split("\\").length;
     const hasDotSegment = decoded.split(/[\\/]/).some((segment) => segment === "." || segment === "..");
     if (introducedSeparator || hasDotSegment || decoded.includes("\0")) {
-      throw new Error(`Unsafe structural encoding rejected: ${url}`);
+      throw new MarkdownUrlError(`Unsafe structural encoding rejected: ${url}`);
     }
     probe = decoded;
   }
@@ -68,7 +79,7 @@ function normalizeContainedPath(documentPath: string, url: string): string {
   try {
     decodedPath = decodeURIComponent(pathname);
   } catch {
-    throw new Error(`Invalid encoded relative URL: ${url}`);
+    throw new MarkdownUrlError(`Invalid encoded relative URL: ${url}`);
   }
   assertRemainingEncodingIsNonStructural(decodedPath, url);
   decodedPath = decodedPath.replaceAll("\\", "/");
@@ -82,7 +93,7 @@ function normalizeContainedPath(documentPath: string, url: string): string {
     normalized === ".." ||
     normalized.startsWith("../")
   ) {
-    throw new Error(`Relative URL escapes the project document root: ${url}`);
+    throw new MarkdownUrlError(`Relative URL escapes the project document root: ${url}`);
   }
 
   const encoded = normalized.split("/").map(encodeURIComponent).join("/");
@@ -94,30 +105,40 @@ function walk(node: MarkdownNode, visit: (node: MarkdownNode) => void): void {
   for (const child of node.children ?? []) walk(child, visit);
 }
 
+function validateExternalUrl(node: MarkdownNode): string | undefined {
+  if (!node.url) return undefined;
+  const scheme = externalScheme(node.url);
+  if (!scheme) return undefined;
+  if (
+    !node.url.startsWith("//") &&
+    node.url.slice(0, scheme.length + 1).toLowerCase() !== `${scheme}:`
+  ) {
+    throw new MarkdownUrlError(`Encoded URL scheme rejected: ${scheme}`);
+  }
+  const allowed =
+    scheme === "http" || scheme === "https" || (node.type === "link" && scheme === "mailto");
+  if (!allowed) throw new MarkdownUrlError(`Unsafe URL scheme rejected: ${scheme}`);
+  return scheme;
+}
+
+function markExternalLink(node: MarkdownNode): void {
+  if (node.type !== "link") return;
+  node.data ??= {};
+  node.data.hProperties = {
+    ...node.data.hProperties,
+    target: "_blank",
+    rel: "noopener noreferrer",
+  };
+}
+
 export function rewriteRelativeUrls(options: RewriteRelativeUrlsOptions) {
   return (tree: MarkdownNode): void => {
     walk(tree, (node) => {
       if ((node.type !== "link" && node.type !== "image") || !node.url) return;
 
-      const scheme = externalScheme(node.url);
+      const scheme = validateExternalUrl(node);
       if (scheme) {
-        if (
-          !node.url.startsWith("//") &&
-          node.url.slice(0, scheme.length + 1).toLowerCase() !== `${scheme}:`
-        ) {
-          throw new Error(`Encoded URL scheme rejected: ${scheme}`);
-        }
-        const allowed =
-          scheme === "http" || scheme === "https" || (node.type === "link" && scheme === "mailto");
-        if (!allowed) throw new Error(`Unsafe URL scheme rejected: ${scheme}`);
-        if (node.type === "link") {
-          node.data ??= {};
-          node.data.hProperties = {
-            ...node.data.hProperties,
-            target: "_blank",
-            rel: "noopener noreferrer",
-          };
-        }
+        markExternalLink(node);
         return;
       }
 
@@ -128,6 +149,25 @@ export function rewriteRelativeUrls(options: RewriteRelativeUrlsOptions) {
         node.type === "image"
           ? `/api/assets/${projectId}/${rewritten}`
           : `/p/${projectId}/${rewritten}`;
+    });
+  };
+}
+
+export function rewriteRemoteUrls(options: RewriteRemoteUrlsOptions) {
+  return (tree: MarkdownNode): void => {
+    walk(tree, (node) => {
+      if ((node.type !== "link" && node.type !== "image") || !node.url) return;
+      const scheme = validateExternalUrl(node);
+      if (node.url.startsWith("#")) return;
+
+      try {
+        node.url = new URL(node.url, options.baseUrl).href;
+      } catch {
+        throw new MarkdownUrlError(`Invalid remote document URL: ${node.url}`);
+      }
+      if (scheme || node.url.startsWith("http://") || node.url.startsWith("https://")) {
+        markExternalLink(node);
+      }
     });
   };
 }

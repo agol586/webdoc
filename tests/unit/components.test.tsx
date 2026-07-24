@@ -10,6 +10,7 @@ import { ImageView } from "../../src/components/document-view";
 import { MermaidBlocks } from "../../src/components/mermaid-blocks";
 import { ProjectSwitcher } from "../../src/components/project-switcher";
 import { ProjectUnavailable } from "../../src/components/project-unavailable";
+import { RemoteLinkForm } from "../../src/components/remote-link-form";
 import ErrorView from "../../src/app/error";
 
 const mockPush = vi.fn();
@@ -47,6 +48,18 @@ beforeEach(() => {
   mockMermaidRender.mockResolvedValue({
     svg: '<svg viewBox="0 0 100 50"><title>diagram</title></svg>',
   });
+});
+
+it("submits a remote Markdown URL through the root link query", () => {
+  render(<RemoteLinkForm defaultValue="https://example.com/README.md" />);
+
+  const input = screen.getByRole("textbox", { name: "Remote Markdown URL" });
+  expect(input).toHaveAttribute("name", "link");
+  expect(input).toHaveAttribute("type", "url");
+  expect(input).toHaveAttribute("required");
+  expect(input).toHaveValue("https://example.com/README.md");
+  expect(input.closest("form")).toHaveAttribute("action", "/");
+  expect(screen.getByRole("button", { name: "Open" })).toHaveAttribute("type", "submit");
 });
 
 it("switches projects to their homepages", async () => {
@@ -87,6 +100,16 @@ it("traps focus in the mobile drawer and restores it on Escape", async () => {
   await user.keyboard("{Escape}");
   expect(trigger).toHaveFocus();
   expect(trigger).toHaveAttribute("aria-expanded", "false");
+});
+
+it("shows the remote Markdown form in the application header", () => {
+  const view = render(
+    <AppShell projects={PROJECTS} activeId="alpha" nodes={TREE}>
+      <p>Document</p>
+    </AppShell>,
+  );
+
+  expect(within(view.container).getByRole("textbox", { name: "Remote Markdown URL" })).toBeVisible();
 });
 
 it("previews a deep-linked image through the asset endpoint", () => {

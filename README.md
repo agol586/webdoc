@@ -57,6 +57,18 @@ When packaging a production build, preserve Next.js/Turbopack output-file tracin
 
 Markdown (`.md`) is rendered with GitHub-flavored tables and task lists, syntax-highlighted fenced code, and Mermaid fenced diagrams. Common AVIF, GIF, JPEG, PNG, SVG, and WebP images are previewed; other regular files are exposed as bounded attachments.
 
+## Remote Markdown links
+
+To display a Markdown file from the public Internet, pass its URL as an encoded `link` query parameter:
+
+```text
+http://127.0.0.1:3030/?link=https%3A%2F%2Fraw.githubusercontent.com%2Fowner%2Frepository%2Fmain%2FREADME.md
+```
+
+Remote documents must use HTTPS. DocShare validates and pins public DNS addresses for every redirect, rejects private and reserved networks, limits the request to 10 seconds and `limits.markdownBytes`, and accepts Markdown-compatible textual responses only. Raw HTML remains disabled. Relative links are resolved against the final remote document URL; remote images remain blocked by the Content Security Policy to avoid third-party tracking and active SVG content.
+
+Remote fetching adds outbound DNS, TLS, and Markdown-rendering work per request. If DocShare is reachable beyond localhost, enforce authentication plus request-rate and concurrency limits at the reverse proxy. The IPv6 allocation policy is intentionally fail-closed; newly allocated public ranges may require a DocShare update before they are accepted.
+
 ## Security and network exposure
 
 DocShare confines resolved document paths to configured project roots, rejects traversal and unsafe link schemes, removes raw HTML from Markdown, applies a restrictive Content Security Policy, and sends anti-sniffing, no-referrer, and frame-denial headers. Errors shown to browsers are generic and do not include filesystem paths or stack traces.

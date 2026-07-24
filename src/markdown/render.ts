@@ -7,12 +7,13 @@ import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 
-import { rewriteRelativeUrls } from "./links";
+import { rewriteRelativeUrls, rewriteRemoteUrls } from "./links";
 
 export interface RenderInput {
   projectId: string;
   documentPath: string;
   source: string;
+  remoteBaseUrl?: string;
 }
 
 type AstNode = {
@@ -81,25 +82,27 @@ function hasHighlightableCode(tree: AstNode): boolean {
 export async function renderMarkdown(
   input: RenderInput,
 ): Promise<{ html: string; title?: string }> {
-  let processor = unified()
+  const createMarkdownProcessor = () => unified()
     .use(remarkParse)
     .use(remarkGfm)
-    .use(captureFirstHeading)
-    .use(rewriteRelativeUrls, {
-      projectId: input.projectId,
-      documentPath: input.documentPath,
-    })
+    .use(captureFirstHeading);
+  const markdownProcessor = input.remoteBaseUrl
+    ? createMarkdownProcessor().use(rewriteRemoteUrls, { baseUrl: input.remoteBaseUrl })
+    : createMarkdownProcessor().use(rewriteRelativeUrls, {
+        projectId: input.projectId,
+        documentPath: input.documentPath,
+      });
+  const htmlProcessor = markdownProcessor
     .use(remarkRehype)
     .use(markMermaidBlocks)
     .use(rehypeSlug)
     .use(rehypeAutolinkHeadings);
 
   const parsed = unified().use(remarkParse).parse(input.source) as AstNode;
-  if (hasHighlightableCode(parsed)) {
-    processor = processor.use(rehypeShiki, { theme: "github-dark" });
-  }
-
-  const file = await processor.use(rehypeStringify).process(input.source);
+  const finalProcessor = hasHighlightableCode(parsed)
+    ? htmlProcessor.use(rehypeShiki, { theme: "github-dark" })
+    : htmlProcessor;
+  const file = await finalProcessor.use(rehypeStringify).process(input.source);
 
   const title = typeof file.data.title === "string" ? file.data.title : undefined;
   return { html: String(file), title };
