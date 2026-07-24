@@ -28,6 +28,30 @@ describe("renderMarkdown", () => {
     );
   });
 
+  it("resolves remote document links against the final response URL", async () => {
+    const { html } = await renderMarkdown({
+      projectId: "remote",
+      documentPath: "https://cdn.example.net/docs/readme.md",
+      remoteBaseUrl: "https://cdn.example.net/docs/readme.md",
+      source: "[Next](../next.md?x=1#part) [Mail](mailto:docs@example.com) ![Image](./image.png) [Part](#part)",
+    });
+
+    expect(html).toContain('href="https://cdn.example.net/next.md?x=1#part"');
+    expect(html).toContain('href="mailto:docs@example.com"');
+    expect(html).toContain('src="https://cdn.example.net/docs/image.png"');
+    expect(html).toContain('href="#part"');
+    expect(html.match(/rel="noopener noreferrer"/g)).toHaveLength(2);
+  });
+
+  it("applies unsafe-scheme rejection to remote document links", async () => {
+    await expect(renderMarkdown({
+      projectId: "remote",
+      documentPath: "https://example.com/readme.md",
+      remoteBaseUrl: "https://example.com/readme.md",
+      source: "[unsafe](java%73cript:alert(1))",
+    })).rejects.toThrow(/encoded|scheme|unsafe/i);
+  });
+
   it("routes all ordinary relative links through pages until the tree identifies their kind", async () => {
     const { html } = await renderMarkdown({ projectId: "alpha", documentPath: "guide/a.md", source: "[PDF](../manual.pdf) [license](../LICENSE) [version](../v1.0)" });
     expect(html).toContain('href="/p/alpha/manual.pdf"');

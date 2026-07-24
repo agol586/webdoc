@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import type { TreeNode } from "../repository/types";
 import { FileTree } from "./file-tree";
 import { ProjectSwitcher, type ProjectOption } from "./project-switcher";
+import { RemoteLinkForm } from "./remote-link-form";
 import { LiveRefresh } from "./live-refresh";
 
 export function AppShell({ projects, activeId, nodes, activePath, children }: {
@@ -59,6 +60,7 @@ export function AppShell({ projects, activeId, nodes, activePath, children }: {
           Browse documents
         </button>
         <ProjectSwitcher projects={projects} activeId={activeId} />
+        <RemoteLinkForm />
       </header>
       <div className="reader-layout">
         <nav className="document-tree desktop-tree" aria-label="Document tree">{tree}</nav>
